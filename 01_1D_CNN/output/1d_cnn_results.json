@@ -1,0 +1,13 @@
+{
+  "model": "1D CNN",
+  "sample_rate": 22050,
+  "clip_duration_ms": 250,
+  "roc_auc": 0.9985847786906349,
+  "pr_auc": 0.9941814590913821,
+  "f2_score": 0.9677107501933488,
+  "train_size": 56812,
+  "val_size": 6086,
+  "test_size": 6086,
+  "total_params": 92513,
+  "timestamp": "2026-06-24T02:39:28.727112"
+}

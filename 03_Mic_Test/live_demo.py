@@ -85,9 +85,12 @@ window_samples_native = int(native_sr * CLIP_DURATION_MS / 1000)
 
 # Ring buffer for native audio
 ring_buffer = np.zeros((window_samples_native, channels), dtype='float32')
+loop_counter = 0
+
+print("📝 Detections will be saved to: detections_log.txt")
 
 def audio_callback(indata, frames, time_info, status):
-    global ring_buffer
+    global ring_buffer, loop_counter
     if status:
         pass # Ignore overflows for now to keep console clean
         
@@ -99,8 +102,18 @@ def audio_callback(indata, frames, time_info, status):
     x = process_audio(ring_buffer, native_sr, channels)
     prob = model.predict(x, verbose=0).flatten()[0]
     
+    timestamp = time.strftime("%H:%M:%S")
+    loop_counter += 1
+    
     if prob >= CONFIDENCE_THRESHOLD:
-        print(f"🔫 GUNSHOT DETECTED! | Confidence: {prob:.4f}")
+        msg = f"[{timestamp}] 🔫 GUNSHOT DETECTED! | Confidence: {prob:.4f}"
+        print(f"\n{msg}")
+        with open("detections_log.txt", "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d ") + msg + "\n")
+    else:
+        # Print a live update every ~1 second (8 hops)
+        if loop_counter % 8 == 0:
+            print(f"[{timestamp}] 🎧 Listening... (Background noise max: {prob:.4f})     ", end="\r", flush=True)
 
 try:
     with sd.InputStream(device=device_id, samplerate=native_sr, channels=channels, 
@@ -108,4 +121,4 @@ try:
         while True:
             time.sleep(0.1)
 except KeyboardInterrupt:
-    print("\n🛑 Stopped listening.")
+    print("\n\n🛑 Stopped listening.")

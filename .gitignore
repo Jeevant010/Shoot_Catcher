@@ -210,3 +210,7 @@ __marimo__/
 Non_Disclose/
 
 Data/
+
+recordings/
+test_recording.wav
+detections_log.txt

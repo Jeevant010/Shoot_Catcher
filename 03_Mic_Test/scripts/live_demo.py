@@ -19,10 +19,12 @@ from tensorflow import keras
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TF logs
 
 MODEL_PATH = r'..\..\01_1D_CNN\output\1d_cnn_best.h5'
+ENHANCED_MODEL_PATH = r'..\..\Enhanced_Models\01_Enhanced_1D_CNN\output\enhanced_1d_cnn_best.h5'
 TARGET_SR = 22050
 CLIP_DURATION_MS = 250
 TARGET_SAMPLES = int(TARGET_SR * CLIP_DURATION_MS / 1000)
 CONFIDENCE_THRESHOLD = 0.7
+IS_DUAL_HEAD = False  # Auto-detected after model load
 
 # --- Tuning parameters ---
 WARMUP_CALLBACKS = 16        # Skip first N callbacks to fill ring buffer with real audio
@@ -127,7 +129,21 @@ print(f"✅ Selected Device: [{device_id}] {device_name}")
 print(f"   Native Rate: {native_sr} Hz | Channels: {channels}")
 print(f"   Model Target: {TARGET_SR} Hz (will auto-resample)")
 
-print("\n📦 Loading model...")
+print("\n📦 Select model to load:")
+if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), ENHANCED_MODEL_PATH)):
+    print(" [1] Original 1D CNN (01_1D_CNN)")
+    print(" [2] Enhanced 1D CNN (dual-head, with augmentations)")
+    model_choice = input("👉 Choice (1 or 2): ").strip()
+else:
+    model_choice = '1'
+    print("   (Enhanced model not found, using original)")
+
+if model_choice == '2':
+    chosen_path = ENHANCED_MODEL_PATH
+else:
+    chosen_path = MODEL_PATH
+
+print(f"Loading: {chosen_path}")
 
 # Fix for Keras 2 -> Keras 3 compatibility (BatchNormalization renorm args removed)
 class CompatBatchNormalization(keras.layers.BatchNormalization):
@@ -140,12 +156,26 @@ class CompatBatchNormalization(keras.layers.BatchNormalization):
 
 try:
     model = keras.models.load_model(
-        MODEL_PATH,
+        chosen_path,
         custom_objects={'BatchNormalization': CompatBatchNormalization}
     )
-    print("✅ Model loaded successfully!")
+    # Auto-detect dual-head model
+    if isinstance(model.output, list) and len(model.output) == 2:
+        IS_DUAL_HEAD = True
+        print("✅ Dual-head model loaded (gunshot + anomaly outputs)!")
+    else:
+        IS_DUAL_HEAD = False
+        print("✅ Single-head model loaded!")
+    
+    # Auto-detect clip duration from model input shape
+    expected_samples = model.input_shape[1]
+    if expected_samples != TARGET_SAMPLES:
+        print(f"   ⚠️ Model expects {expected_samples} samples — adjusting from {TARGET_SAMPLES}")
+        TARGET_SAMPLES = expected_samples
+        CLIP_DURATION_MS = int(TARGET_SAMPLES / TARGET_SR * 1000)
+        print(f"   → New clip duration: {CLIP_DURATION_MS}ms")
 except Exception as e:
-    print(f"❌ Could not load model at {MODEL_PATH}: {e}")
+    print(f"❌ Could not load model at {chosen_path}: {e}")
     sys.exit(1)
 
 # ============================================================
@@ -170,34 +200,45 @@ def inference_thread_fn():
             # Poison pill — shut down
             break
 
-        prob = model.predict(x, verbose=0).flatten()[0]
+        prob = model.predict(x, verbose=0)
+        
+        # Handle dual-head vs single-head model output
+        if IS_DUAL_HEAD:
+            gunshot_prob = float(prob[0].flatten()[0])
+            anomaly_score = float(prob[1].flatten()[0])
+        else:
+            gunshot_prob = float(prob.flatten()[0])
+            anomaly_score = None
+        
         timestamp = time.strftime("%H:%M:%S")
         timestamp_file = time.strftime("%H%M%S")
         loop_counter += 1
         now = time.time()
 
-        if prob >= CONFIDENCE_THRESHOLD:
+        if gunshot_prob >= CONFIDENCE_THRESHOLD:
             # Cooldown: don't spam detections
             if (now - last_detection_time) >= COOLDOWN_SECONDS:
                 last_detection_time = now
-                msg = f"[{timestamp}] \U0001f52b GUNSHOT DETECTED! | Confidence: {prob:.4f} | RMS: {rms:.5f}"
+                anomaly_str = f" | Anomaly: {anomaly_score:.4f}" if anomaly_score is not None else ""
+                msg = f"[{timestamp}] \U0001f52b GUNSHOT DETECTED! | Confidence: {gunshot_prob:.4f}{anomaly_str} | RMS: {rms:.5f}"
                 print(f"\n{msg}")
                 with open(LOG_FILE, "a", encoding="utf-8") as f:
                     f.write(time.strftime("%Y-%m-%d ") + msg + "\n")
 
                 # Save the audio the model processed for this detection
                 if SAVE_AUDIO and wav_data is not None:
-                    fname = RECORDINGS_DIR / f"GUNSHOT_{timestamp_file}_conf{prob:.3f}.wav"
+                    fname = RECORDINGS_DIR / f"GUNSHOT_{timestamp_file}_conf{gunshot_prob:.3f}.wav"
                     sf.write(str(fname), wav_data, TARGET_SR)
                     print(f"   💾 Saved processed audio → {fname}")
         else:
             # Print a live update every ~1 second (8 hops)
             if loop_counter % 8 == 0:
-                print(f"[{timestamp}] \U0001f3a7 Listening... (prob: {prob:.4f} | RMS: {rms:.5f})     ", end="\r", flush=True)
+                anomaly_str = f" | anom: {anomaly_score:.3f}" if anomaly_score is not None else ""
+                print(f"[{timestamp}] \U0001f3a7 Listening... (prob: {gunshot_prob:.4f}{anomaly_str} | RMS: {rms:.5f})     ", end="\r", flush=True)
 
                 # Periodically save a "what model hears" sample (every ~8 seconds)
                 if SAVE_AUDIO and wav_data is not None and loop_counter % 64 == 0:
-                    fname = RECORDINGS_DIR / f"ambient_{timestamp_file}_prob{prob:.3f}.wav"
+                    fname = RECORDINGS_DIR / f"ambient_{timestamp_file}_prob{gunshot_prob:.3f}.wav"
                     sf.write(str(fname), wav_data, TARGET_SR)
                     print(f"\n   💾 Saved ambient sample → {fname}")
 

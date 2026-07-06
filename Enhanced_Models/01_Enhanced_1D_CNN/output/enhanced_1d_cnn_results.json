@@ -1,0 +1,12 @@
+{
+  "f2_score": 0.9712009803921569,
+  "roc_auc": 0.998464728343982,
+  "clip_duration_ms": 750,
+  "augmentations": {
+    "mixup": true,
+    "specaugment": true,
+    "pitch_shift": true,
+    "speed_perturb": true
+  },
+  "timestamp": "2026-07-07T04:58:13.794044"
+}

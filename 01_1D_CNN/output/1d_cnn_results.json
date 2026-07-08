@@ -1,13 +1,13 @@
 {
   "model": "1D CNN",
   "sample_rate": 22050,
-  "clip_duration_ms": 250,
-  "roc_auc": 0.9988186349670981,
-  "pr_auc": 0.9847183507873707,
-  "f2_score": 0.963382737576286,
+  "clip_duration_ms": 750,
+  "roc_auc": 0.9998797317485832,
+  "pr_auc": 0.9985835430018912,
+  "f2_score": 0.9904430929626412,
   "train_size": 82802,
   "val_size": 8871,
   "test_size": 8871,
   "total_params": 92513,
-  "timestamp": "2026-07-05T05:05:37.890526"
+  "timestamp": "2026-07-07T02:06:02.942416"
 }

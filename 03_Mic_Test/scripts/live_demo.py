@@ -256,6 +256,9 @@ class ModelWrapper:
         else:
             y = raw_audio.flatten()
 
+        # Remove DC offset (Hardware MEMS/Electret Mic Bias Removal)
+        y = y - np.mean(y)
+
         # Resample to TARGET_SR
         y = resample_audio(y, native_sr, TARGET_SR)
 
@@ -265,12 +268,14 @@ class ModelWrapper:
         else:
             y = np.pad(y, (0, self.input_samples - len(y)))
 
-        # Peak normalize to [-1, 1]
-        peak = np.max(np.abs(y))
-        if peak > 1e-6:
-            y = y / peak
+        # Energy-Gated Peak Normalization (Prevents noise amplification)
+        rms = np.sqrt(np.mean(y ** 2))
+        if rms >= ENERGY_GATE_THRESHOLD:
+            peak = np.max(np.abs(y))
+            if peak > 1e-6:
+                y = y / peak
         else:
-            y = np.zeros_like(y)
+            y = np.clip(y, -1.0, 1.0)
 
         if not self.is_2d:
             # 1D Raw Audio tensor: (1, input_samples, 1)
@@ -292,8 +297,9 @@ class ModelWrapper:
             else:
                 spec = spec[:, :target_time_steps]
 
-            # Normalize using norm stats
-            spec_norm = (spec - self.norm_mean) / max(self.norm_std, 1e-6)
+            # Normalize dB from [-80, 0] to [0, 1] matching training pipeline
+            spec_norm = (spec + 80.0) / 80.0
+            spec_norm = np.clip(spec_norm, 0.0, 1.0)
             x = spec_norm.reshape(1, n_mels, target_time_steps, 1).astype(np.float32)
 
         # Execute prediction
@@ -389,7 +395,7 @@ def run_live_monitoring(active_models, device_id, native_sr, channels, is_multi=
     # Calculate buffer size based on largest required sample window
     max_samples = max(m.input_samples for m in active_models)
     clip_duration_ms = int(max_samples / TARGET_SR * 1000)
-    hop_ms = int(clip_duration_ms * 0.5)
+    hop_ms = int(clip_duration_ms * 0.25)  # 75% overlap to eliminate boundary slicing
 
     hop_samples_native = int(native_sr * hop_ms / 1000)
     window_samples_native = int(native_sr * clip_duration_ms / 1000)
@@ -566,7 +572,7 @@ def run_file_benchmark(active_models):
     # Sliding window settings
     max_samples = max(m.input_samples for m in active_models)
     clip_ms = int(max_samples / TARGET_SR * 1000)
-    hop_ms = 125  # 125ms slide
+    hop_ms = 93   # ~75% overlap slide for 750ms window
     hop_samples = int(TARGET_SR * hop_ms / 1000)
     n_windows = max(1, (total_samples - max_samples) // hop_samples + 1)
 

@@ -2,16 +2,16 @@
   "model": "2D CNN (mel_spectrogram)",
   "feature_type": "mel_spectrogram",
   "sample_rate": 22050,
-  "roc_auc": 0.9236191312764634,
-  "pr_auc": 0.362816302572781,
-  "f2_score": 0.0,
-  "train_size": 82802,
-  "test_size": 8871,
+  "roc_auc": 0.9999944324489025,
+  "pr_auc": 0.9999491454486776,
+  "f2_score": 0.9978606356968215,
+  "train_size": 62498,
+  "test_size": 6696,
   "total_params": 249985,
   "input_shape": [
     64,
     130,
     1
   ],
-  "timestamp": "2026-07-08T03:03:11.767262"
+  "timestamp": "2026-08-12T14:43:33.260779"
 }

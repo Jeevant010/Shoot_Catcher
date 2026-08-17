@@ -1,0 +1,24 @@
+{
+  "model_name": "Enhanced_2D_CNN_DualHead",
+  "f2_score": 0.9955629506378258,
+  "roc_auc": 0.999590259329295,
+  "average_precision": 0.9996141350597023,
+  "clip_duration_ms": 750,
+  "sample_rate": 22050,
+  "mel_params": {
+    "n_mels": 64,
+    "n_fft": 2048,
+    "hop_length": 512,
+    "fmin": 20,
+    "fmax": 8000
+  },
+  "augmentations": {
+    "mixup": true,
+    "specaugment_freq": true,
+    "specaugment_time": true,
+    "pitch_shift": true,
+    "speed_perturb": true
+  },
+  "best_model_path": "C:\\Users\\aadit\\Desktop\\Shoot_Catcher\\Enhanced_Models\\02_Enhanced_2D_CNN\\output\\enhanced_2d_cnn_best.h5",
+  "timestamp": "2026-08-17T23:38:20.277886"
+}

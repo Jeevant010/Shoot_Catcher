@@ -22,17 +22,18 @@ pip install tensorflow==2.16.1 soundfile scipy numpy librosa
 
 ---
 
+
 ## 📂 2. File & Folder Organization
 
 ```text
 Shoot_Catcher/
 ├── Data/
 │   └── SPLIT_DATASET_750MS/
-│       └── test/                           ← Option B Dataset (1,442 pre-trimmed clips)
+│       └── test/                           ← Test Data Dataset (1,442 pre-trimmed clips)
 │           ├── class_0_nongunshot/         (721 files)
 │           └── class_1_gunshot/            (721 files)
 │
-├── My_Test_Audio/                          ← Option A Dataset (75 full-length recordings)
+├── My_Test_Audio/                          ← Read Data Dataset (75 full-length recordings)
 │   ├── Actual_Gunshots/                    (20 firearm files: AK47, Magnum, Rifles)
 │   ├── Like_Gunshots/                      (20 imposter files: Fireworks, Claps, Knocks)
 │   └── Not_Gunshots/                       (35 ambient files: Rain, Engines, Sirens)
@@ -40,8 +41,8 @@ Shoot_Catcher/
 ├── download_test_audio.py                  ← Script to re-download external test audio
 │
 └── 03_Mic_Test/scripts/
-    ├── run_benchmark_dataset.py            ⭐ Permanent Option B Benchmark Runner
-    ├── run_benchmark_external.py           ⭐ Permanent Option A Benchmark Runner
+    ├── run_benchmark_dataset.py            ⭐ Permanent Test Data Benchmark Runner
+    ├── run_benchmark_external.py           ⭐ Permanent Read Data Benchmark Runner
     ├── test_on_recording.py                🎵 Single-file sliding-window tester
     └── live_demo.py                        🎙️ Multi-model interactive dashboard
 ```
@@ -50,7 +51,7 @@ Shoot_Catcher/
 
 ## ⚡ 3. How to Run the Benchmarks
 
-### 🧪 Test 1: Run Held-Out Dataset Benchmark (Option B)
+### 🧪 Test 1: Run Held-Out Dataset Benchmark (Test Data)
 Evaluates all 5 models on the 1,442 pre-trimmed clips in `Data/SPLIT_DATASET_750MS/test/`.
 
 **Command:**
@@ -67,7 +68,7 @@ Evaluates all 5 models on the 1,442 pre-trimmed clips in `Data/SPLIT_DATASET_750
 
 ---
 
-### 🧪 Test 2: Run External Audio Benchmark (Option A)
+### 🧪 Test 2: Run External Audio Benchmark (Read Data)
 Evaluates all 5 models on the variable-length audio tracks in `My_Test_Audio/`.
 
 **Command:**

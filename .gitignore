@@ -214,3 +214,6 @@ Data/
 recordings/
 test_recording.wav
 detections_log.txt
+
+# Audio File
+My_Test_Audio/

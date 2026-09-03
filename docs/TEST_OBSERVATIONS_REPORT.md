@@ -9,30 +9,34 @@
 
 ## 📋 Executive Summary
 
+> [!NOTE]
+> **Hardware Status Notice:**  
+> All evaluations documented in this report were executed strictly in software on the local host machine using Python. **No physical edge hardware (Raspberry Pi, Arduino Nano) has been provisioned, connected, or flashed yet.** The edge memory footprints and firmware discussed represent software profile targets prepared for future physical hardware testing.
+
 This report documents the rigorous, reproducible empirical evaluation of all five deep learning models built within the `Shoot_Catcher` repository. To avoid the pitfall of reporting only laboratory metrics, evaluation was conducted across **two distinct testing regimes**:
 
-1. **Option B — Curated Dataset Hold-Out Test:** 1,442 pre-trimmed 750 ms clips (721 gunshots, 721 non-gunshots) split via GroupKFold to eliminate recording leakage.
-2. **Option A — Real-World External Audio Benchmark:** 75 full-length recordings (20 real firearms, 20 acoustic imposters, 35 ambient background tracks) evaluated via a sliding 750 ms window (75% overlap).
+1. **Test Data Benchmark (Curated Dataset Hold-Out):** 1,442 pre-trimmed 750 ms clips (721 gunshots, 721 non-gunshots) split via GroupKFold to eliminate recording leakage.
+2. **Real Data Benchmark (External Audio Recordings):** 75 full-length recordings (20 real firearms, 20 acoustic imposters, 35 ambient background tracks) evaluated via a sliding 750 ms window (75% overlap).
 
 ```
                              TESTING METHODOLOGY OVERVIEW
                              
-     Option B: Curated Dataset Split                  Option A: External Audio Benchmark
-     (1,442 Pre-Trimmed 750ms Clips)                 (75 Variable-Length Full Recordings)
- ┌──────────────────────────────────────┐        ┌────────────────────────────────────────┐
- │ • 721 Real Gunshot Clips             │        │ • 20 Real Firearms (AK-47, Magnum, etc)│
- │ • 721 Curated Background Noise Clips │        │ • 20 Imposters (Fireworks, Claps)      │
- │ • Exact 1:1 Balanced Evaluation      │        │ • 35 Ambient Tracks (Rain, Sirens, Dog)│
- └──────────────────┬───────────────────┘        └───────────────────┬────────────────────┘
-                    │                                                │
-                    ▼                                                ▼
-         Controlled Baseline Check                        Real-World Robustness &
-        (Verifies Model Convergence)                     Acoustic Domain Shift Check
+        Test Data: Curated Dataset Split                Real Data: External Audio Benchmark
+        (1,442 Pre-Trimmed 750ms Clips)                 (75 Variable-Length Full Recordings)
+    ┌──────────────────────────────────────┐        ┌────────────────────────────────────────┐
+    │ • 721 Real Gunshot Clips             │        │ • 20 Real Firearms (AK-47, Magnum, etc)│
+    │ • 721 Curated Background Noise Clips │        │ • 20 Imposters (Fireworks, Claps)      │
+    │ • Exact 1:1 Balanced Evaluation      │        │ • 35 Ambient Tracks (Rain, Sirens, Dog)│
+    └──────────────────┬───────────────────┘        └───────────────────┬────────────────────┘
+                       │                                                │
+                       ▼                                                ▼
+            Controlled Baseline Check                        Real-World Robustness &
+           (Verifies Model Convergence)                     Acoustic Domain Shift Check
 ```
 
 ---
 
-## 📊 1. Test Regime 1: Curated Dataset Hold-Out Split (Option B)
+## 📊 1. Test Regime 1: Curated Dataset Hold-Out Split (Test Data)
 
 ### 1.1 Dataset Composition
 - **Storage Location:** `Data/SPLIT_DATASET_750MS/test/`
@@ -53,7 +57,7 @@ This report documents the rigorous, reproducible empirical evaluation of all fiv
 
 ---
 
-### 1.3 Key Observations (Option B)
+### 1.3 Key Observations (Test Data)
 
 1. **Near-Perfect Discrimination on Laboratory Data:**
    Both the **Baseline 1D CNN** and **Robust CRNN (PCEN)** achieved **99.79% accuracy**, correctly classifying 719 of 721 gunshots while producing only 1 false alarm across 721 non-gunshots. The **Enhanced 2D CNN** followed closely at **99.51% accuracy**.
@@ -64,7 +68,7 @@ This report documents the rigorous, reproducible empirical evaluation of all fiv
 
 ---
 
-## 📈 2. Test Regime 2: Real-World External Audio Benchmark (Option A)
+## 📈 2. Test Regime 2: Real-World External Audio Benchmark (Real Data)
 
 To test generalization on unseen real-world audio, 75 uncompressed WAV recordings were collected from independent acoustic databases (`My_Test_Audio/`).
 

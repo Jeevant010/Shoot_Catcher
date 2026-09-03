@@ -33,16 +33,24 @@ Shoot_Catcher/
 │           ├── class_0_nongunshot/         (721 files)
 │           └── class_1_gunshot/            (721 files)
 │
-├── My_Test_Audio/                          ← Read Data Dataset (75 full-length recordings)
+├── My_Test_Audio/                          ← Real Data Dataset (75 full-length recordings)
 │   ├── Actual_Gunshots/                    (20 firearm files: AK47, Magnum, Rifles)
 │   ├── Like_Gunshots/                      (20 imposter files: Fireworks, Claps, Knocks)
 │   └── Not_Gunshots/                       (35 ambient files: Rain, Engines, Sirens)
+│
+├── Verification_Outputs/                   ⭐ Human Verification & Audio Audit Exports
+│   ├── By_Model/
+│   │   ├── Enhanced_2D_CNN_Dual/           (Detected_Gunshots, Ignored_NonGunshots, Trigger_Slices)
+│   │   ├── Robust_CRNN_PCEN/               (Detected_Gunshots, Ignored_NonGunshots, Trigger_Slices)
+│   │   └── Baseline_1D_CNN/                (Detected_Gunshots, Ignored_NonGunshots, Trigger_Slices)
+│   ├── verification_summary.csv            (Audit spreadsheet with timestamps and confidence scores)
+│   └── verification_dashboard.html         (Interactive browser dashboard with built-in audio players)
 │
 ├── download_test_audio.py                  ← Script to re-download external test audio
 │
 └── 03_Mic_Test/scripts/
     ├── run_benchmark_dataset.py            ⭐ Permanent Test Data Benchmark Runner
-    ├── run_benchmark_external.py           ⭐ Permanent Read Data Benchmark Runner
+    ├── run_benchmark_external.py           ⭐ Permanent Real Data Runner + Audio Verification Exporter
     ├── test_on_recording.py                🎵 Single-file sliding-window tester
     └── live_demo.py                        🎙️ Multi-model interactive dashboard
 ```
@@ -68,23 +76,34 @@ Evaluates all 5 models on the 1,442 pre-trimmed clips in `Data/SPLIT_DATASET_750
 
 ---
 
-### 🧪 Test 2: Run External Audio Benchmark (Read Data)
-Evaluates all 5 models on the variable-length audio tracks in `My_Test_Audio/`.
+### 🧪 Test 2: Run External Audio Benchmark (Real Data) — Dual Flow Support
+Evaluates all 5 models on the variable-length audio tracks in `My_Test_Audio/`. You can choose between **two operational test flows**:
 
-**Command:**
+#### ⚡ Flow 1: Normal Fast Benchmark (Metrics Scorecard Only)
+Use this when you simply want to test the models and see the numbers and accuracy table in the terminal without copying or creating files on disk:
+```bash
+& "C:\Users\aadit\.conda\envs\Shooter_model\python.exe" 03_Mic_Test/scripts/run_benchmark_external.py --no-export
+```
+
+#### 🎧 Flow 2: Human Verification Benchmark (With Audio Exports & Dashboard)
+Use this when you want a human to listen to, audit, and verify every sound that was detected or ignored:
 ```bash
 & "C:\Users\aadit\.conda\envs\Shooter_model\python.exe" 03_Mic_Test/scripts/run_benchmark_external.py
 ```
-*(Or if Conda environment is active: `python 03_Mic_Test/scripts/run_benchmark_external.py`)*
 
 #### What the Script Does:
 1. Iterates through `Actual_Gunshots/`, `Like_Gunshots/`, and `Not_Gunshots/`.
 2. Slides a 750 ms window with **75% overlap** across each audio file.
 3. Records the maximum confidence score across all windows for each model.
-4. Outputs:
-   - **Overall Scorecard:** Accuracy, Precision, Recall, F1, F2, and Counts.
+4. **If Human Verification Mode is Active (`Verification_Outputs/`):**
+   - Saves full audio files into `By_Model/<Model_Name>/Detected_Gunshots/` or `Ignored_NonGunshots/`.
+   - Saves the exact 750 ms sound bite that triggered the alarm into `Trigger_Slices_750ms/`.
+   - Generates `verification_summary.csv` with time offsets, labels, and confidence percentages.
+   - Generates `verification_dashboard.html`: an interactive browser page with built-in audio players so a human reviewer can click "Play" and listen to any detection.
+5. Outputs:
+   - **Overall Scorecard:** Accuracy, Precision, Recall, F1, F2, and Confusion Counts.
    - **Detailed Category Breakdown:** Gunshots caught, Imposters rejected, Ambient noise ignored.
-5. Typical execution time: ~6 to 7 minutes on CPU for 75 tracks.
+6. Execution time: ~5 to 6 minutes on CPU for 75 tracks.
 
 ---
 

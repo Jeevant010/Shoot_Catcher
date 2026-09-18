@@ -19,6 +19,7 @@ from pathlib import Path
 
 # Add current directory to path
 SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = SCRIPT_DIR.parents[1]
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -47,8 +48,11 @@ def main():
     if args.input:
         wav_path = Path(args.input)
         if not wav_path.exists():
-            print(f"❌ Specified file not found: {wav_path}")
-            return
+            if (PROJECT_ROOT / args.input).exists():
+                wav_path = PROJECT_ROOT / args.input
+            else:
+                print(f"❌ Specified file not found: {wav_path}")
+                return
 
     live_demo.run_file_benchmark(manager.trained_models, wav_path=wav_path)
 

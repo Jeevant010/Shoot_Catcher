@@ -241,17 +241,27 @@ def generate_html_report(report_path, dataset_name, models, metrics_data, log_re
 def run_benchmark(dataset_dir, dataset_name, max_files_per_cat=None, threshold=DEFAULT_THRESHOLD):
     base_dir = Path(dataset_dir)
 
-    # Flexible directory lookup (with or without underscores)
+    # Flexible directory lookup (with or without underscores, plus nested check)
+    if (base_dir / "test_dataset").exists() and (base_dir / "test_dataset").is_dir():
+        cand = base_dir / "test_dataset"
+        if any("gunshot" in x.name.lower() or "imposter" in x.name.lower() for x in cand.iterdir() if x.is_dir()):
+            base_dir = cand
+
     def find_matching_dir(parent, candidates):
         for c in candidates:
             p = parent / c
             if p.exists() and p.is_dir():
                 return p
+        for item in parent.iterdir():
+            if item.is_dir():
+                for c in candidates:
+                    if c.lower() in item.name.lower():
+                        return item
         return parent / candidates[0]
 
-    dir_actual = find_matching_dir(base_dir, ["Actual_Gunshots", "ActualGunshots", "actual_gunshots", "actualgunshots"])
-    dir_fake = find_matching_dir(base_dir, ["Fake_Gunshots", "FakeGunshots", "fake_gunshots", "fakegunshots"])
-    dir_not = find_matching_dir(base_dir, ["Not_Gunshots", "NotGunshots", "not_gunshots", "notgunshots"])
+    dir_actual = find_matching_dir(base_dir, ["1_gunshots", "Actual_Gunshots", "ActualGunshots", "actual_gunshots", "actualgunshots", "gunshots", "class_1_gunshot"])
+    dir_fake = find_matching_dir(base_dir, ["3_imposters", "Fake_Gunshots", "FakeGunshots", "fake_gunshots", "fakegunshots", "imposters", "like_gunshots"])
+    dir_not = find_matching_dir(base_dir, ["2_nongunshots", "Not_Gunshots", "NotGunshots", "not_gunshots", "notgunshots", "nongunshots", "class_0_nongunshot"])
 
     actual_files = find_audio_files(dir_actual)
     fake_files = find_audio_files(dir_fake)

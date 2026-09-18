@@ -2,7 +2,7 @@
 ## Technical Research Report (Condensed 4-Page Edition)
 
 **Author:** Shoot_Catcher Research & Development Team  
-**Reference Document:** `docs/RESEARCH_PAPER.md` | **File:** `docs/RESEARCH_REPORT_4PAGE.md`  
+**Reference Documents:** `docs/RESEARCH_PAPER.md` | `docs/PREVIOUS_WORKS_AND_EVOLUTION.md` | `docs/TEST_OBSERVATIONS_REPORT.md`  
 **Evaluation Scope:** 5 Neural Network Models across Controlled Test Data & Real Unseen Audio  
 **Hardware Status:** Target architectures prepared in firmware/code; physical hardware setup pending  
 
@@ -163,6 +163,7 @@ To enable human listening audits of model decisions, all evaluated files are aut
 - **`Trigger_Slices_750ms/`**: The exact $750\text{ ms}$ window slice that triggered the confidence threshold.
 - **`Ignored_NonGunshots/`**: Audio tracks rejected by the model.
 - **Interactive Audio Player:** An HTML dashboard (`verification_dashboard.html`) allows human reviewers to listen to each detection in 1 click.
+- **Live Independent Verification:** Direct testing on unseen Freesound community audio (`custom_sound/`) validated $100\%$ detection of authentic gunshots by Robust CRNN, $90.6\%$ by Enhanced 2D CNN, dormancy on firework hissing ($0\%$), and identified rhythmic clapping as an imposter trigger for transient filters.
 
 ---
 

@@ -48,6 +48,13 @@ Shoot_Catcher/
 │
 ├── download_test_audio.py                  ← Script to re-download external test audio
 │
+├── docs/                                   📚 Technical Documentation Suite
+│   ├── REPORT.md                           ← Condensed 4-Page Research Report
+│   ├── RESEARCH_PAPER.md                   ← Complete 11-Section Academic Paper
+│   ├── PREVIOUS_WORKS_AND_EVOLUTION.md     ← Historical Compendium of Previous Works & Iterations
+│   ├── TEST_OBSERVATIONS_REPORT.md         ← Comparative Test Data vs. Real Data Observations
+│   └── TESTING_EXECUTION_GUIDE.md          ← Step-by-Step Reproduction Guide (This file)
+│
 └── 03_Mic_Test/scripts/
     ├── run_benchmark_dataset.py            ⭐ Permanent Test Data Benchmark Runner
     ├── run_benchmark_external.py           ⭐ Permanent Real Data Runner + Audio Verification Exporter
@@ -131,9 +138,23 @@ To inspect how all 5 models react to any specific `.wav` file:
 & "C:\Users\aadit\.conda\envs\Shooter_model\python.exe" 03_Mic_Test/scripts/test_on_recording.py --input path/to/your_sound.wav --threshold 0.50
 ```
 
+---
+
+### 🐧 Test 5: Running the Benchmark Suite on Linux / Raspberry Pi OS
+The unified benchmark suite `benchmark_dataset_suite.py` dynamically resolves its project path and evaluates dataset folders (`ActualGunshots`, `Fake_Gunshots`, `Not_Gunshots`):
+
+**Command:**
+```bash
+python3 benchmark_dataset_suite.py --dataset-dir External_Datasets --name "External Datasets" --threshold 0.50
+```
+For quick validation on a small subset:
+```bash
+python3 benchmark_dataset_suite.py --dataset-dir External_Datasets --name "Quick Test" --max-files 5
+```
+
 #### What the Script Does:
 - Displays a window-by-window analysis of the audio file.
-- Generates amplified output clips for any detected events in `03_Mic_Test/scripts/test_output/`.
+- Generates amplified output clips for any detected events in `03_Mic_Test/scripts/test_output/` (ignored via `.gitignore`).
 - Prints side-by-side model predictions and gives an overall verdict.
 
 ---

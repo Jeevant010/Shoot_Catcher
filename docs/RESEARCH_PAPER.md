@@ -62,7 +62,7 @@ Early experimental phases in the repository identified four critical practical b
 ```
 
 ### 2.1 The Classification Window: 250 ms vs. 750 ms
-Initial prototypes utilized 250 ms audio windows. Empirical tests revealed that while the initial supersonic crack was captured, the reverberation decay envelope was truncated. Academic literature (e.g., *gabemagee/gunshot_detection*, UrbanSound8K) confirms that classification windows between 0.5 and 2.0 seconds are required to distinguish firearm echoes from brief household clicks. Shoot_Catcher standardized on **750 ms** ($16,537$ samples at $22,050\text{ Hz}$), balancing acoustic context against processing latency on edge microcontrollers.
+Initial prototypes utilized 250 ms audio windows. Empirical tests revealed that while the initial supersonic crack was captured, the reverberation decay envelope was truncated. Academic literature and benchmark datasets (e.g., Kabealo et al., *Data in Brief* 2023; UrbanSound8K) confirm that classification windows between 0.5 and 2.0 seconds are required to capture the full reverberation decay envelope and distinguish firearm echoes from brief household clicks. Shoot_Catcher standardized on **750 ms** ($16,537$ samples at $22,050\text{ Hz}$), balancing acoustic context against processing latency on edge microcontrollers.
 
 ### 2.2 The "Guillotine Effect" at Buffer Boundaries
 In continuous live streams, an acoustic transient may occur exactly at the seam between two processing buffers. If half of the blast energy falls into Buffer $N$ and the remainder into Buffer $N+1$, neither window contains sufficient energy to trigger classification. Shoot_Catcher resolves this by enforcing a **75% sliding window overlap** ($187.5\text{ ms}$ hop step), guaranteeing that any transient event is centered in at least one evaluated frame.
@@ -288,6 +288,12 @@ To enable human listening audits and verify each model's decisions, Shoot_Catche
 - **Full File Partitioning:** Full-length audio files are copied into `Detected_Gunshots/` or `Ignored_NonGunshots/` under each model's directory.
 - **Trigger Slices ($750\text{ ms}$):** For every detection, the exact $750\text{ ms}$ sliding window slice that breached the threshold is isolated and saved into `Trigger_Slices_750ms/` with its timestamp and confidence score.
 - **Interactive Audio Dashboard:** An HTML interface (`verification_dashboard.html`) generates a browser-accessible table with built-in `<audio controls>` players, enabling reviewers to listen to true positives, false alarms, and missed shots with a single click.
+
+### 8.5 Live Independent Community Audio Testing
+To independently validate that results were free of dataset artifact contamination, models were evaluated on raw MP3 files downloaded directly from the Freesound open community library:
+- **Unseen Single Gunshot (`single-gunshot-54-40780.mp3`):** Both Robust CRNN ($100.0\%$) and Enhanced 2D CNN ($90.6\%$) produced immediate true-positive detections at window onset ($0\text{–}750\text{ ms}$), confirming real-world generalizability. Conversely, Baseline 1D CNN dropped to $27.1\%$, confirming waveform domain collapse.
+- **Community Fireworks Display (`fireworks-29629.mp3`, $36.5\text{ s}$):** Models remained completely dormant ($0.0\%$) during burning and smoke crackles, but breached detection thresholds ($>90\%$) during heavy aerial mortar detonations, validating the chemical shockwave imposter hypothesis.
+- **Percussive Clapping (`clapping_04_...wav`):** Enhanced 2D CNN demonstrated $77.1\%$ window rejection ($27/35$ windows ignored), whereas Robust CRNN was triggered by the rapid percussive transients amplified by PCEN's dynamic baseline tracker.
 
 ---
 

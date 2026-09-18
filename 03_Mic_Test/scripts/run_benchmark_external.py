@@ -170,6 +170,16 @@ def generate_html_dashboard(dashboard_path, log_records, threshold=0.50):
     with open(dashboard_path, "w", encoding="utf-8") as f:
         f.write(html)
 
+def find_audio_files(directory):
+    if not directory.exists():
+        return []
+    exts = ("*.wav", "*.mp3", "*.flac", "*.ogg", "*.m4a")
+    files = []
+    for ext in exts:
+        files.extend(directory.glob(ext))
+        files.extend(directory.glob(ext.upper()))
+    return sorted(list(set(files)))
+
 def main():
     parser = argparse.ArgumentParser(description="Shoot_Catcher — Benchmark Runner with Dual Flow Support (Normal & Human Verification)")
     parser.add_argument("--no-export", action="store_true", help="Run in FAST mode (metrics scorecard only, skip copying audio files)")
@@ -181,13 +191,16 @@ def main():
     threshold = args.threshold
 
     base_dir = Path(args.input_dir) if args.input_dir else (PROJECT_ROOT / "My_Test_Audio")
+    if not base_dir.exists() and (PROJECT_ROOT / base_dir).exists():
+        base_dir = PROJECT_ROOT / base_dir
+
     dir_actual = base_dir / "Actual_Gunshots"
     dir_like = base_dir / "Like_Gunshots"
     dir_not = base_dir / "Not_Gunshots"
 
-    actual_files = sorted(list(dir_actual.glob("*.wav"))) if dir_actual.exists() else []
-    like_files = sorted(list(dir_like.glob("*.wav"))) if dir_like.exists() else []
-    not_files = sorted(list(dir_not.glob("*.wav"))) if dir_not.exists() else []
+    actual_files = find_audio_files(dir_actual)
+    like_files = find_audio_files(dir_like)
+    not_files = find_audio_files(dir_not)
     total_files = len(actual_files) + len(like_files) + len(not_files)
 
     print("=" * 85)

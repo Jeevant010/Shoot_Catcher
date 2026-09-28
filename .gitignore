@@ -214,3 +214,10 @@ Data/
 recordings/
 test_recording.wav
 detections_log.txt
+/03_Mic_Test/scripts/test_output/*
+/docs/
+/Verification_Outputs/
+/custom_sound/
+/External_Datasets/
+/test_dataset/
+/My_Test_Audio/

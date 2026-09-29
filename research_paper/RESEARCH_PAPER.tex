@@ -1,0 +1,542 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{array}
+
+\graphicspath{{../}{./}}
+
+\begin{document}
+
+\title{Acoustic Gunshot Detection using Edge AI, TinyML and a Wireless Sensor Network:\\ An Empirical Journey from Hand-Crafted Features to On-Device Binary Inference}
+
+\author{
+    \IEEEauthorblockN{Jeevant Sharma, Deepesh Dangi, Abhishek Yadav, Bhupendra Kumar}
+    \IEEEauthorblockA{\textit{Department of Computer Science and Engineering}\\
+    \textit{Indian Institute of Information Technology, Surat}\\
+    Under the guidance of Dr.~Kaustubh Dhondge}
+}
+
+\maketitle
+
+\begin{abstract}
+Gun violence in a densely populated city demands a response measured in seconds, not minutes, and yet most
+discharges are never reported and the ones reported almost always give an inaccurate location. We describe
+an inexpensive, privacy-preserving Wireless Sensor Network (WSN) in which every node runs an on-device
+classifier; raw audio never leaves the device and only a short binary alert is transmitted, after which
+multiple anchor nodes let a hub localise the event using Time Difference Of Arrival (TDOA). This manuscript
+is written as an honest chronological field log rather than a single cherry-picked model: we trace the path
+from raw data cleaning, through 250\,ms/500\,ms/1\,s trimming, class-imbalance studies from 1:1 to 1:50,
+supervised baselines (linear regression, SVM, Random Forest) that scored 99--100\% on closed splits and then
+collapsed to near-constant false alarms on a live microphone, into the Edge Impulse TinyML experiments (MFCC
+and MFE spectrogram, 1D and 2D CNN, anomaly detection), then into the native deep-CNN progression
+(1D $\rightarrow$ 2D $\rightarrow$ 3D $\rightarrow$ enhanced dual-head), and finally into a bioacoustic
+Per-Channel Energy Normalization (PCEN) $+$ Bidirectional GRU recurrent network. On a balanced, unseen
+300-clip in-the-wild benchmark (100 real gunshots, 100 ambient, 100 hard imposters) the lightweight Enhanced
+2D CNN reached sub-millisecond inference ($0.09$\,ms, $0.05\%$ of the $187.5$\,ms hop budget) with up to
+$99\%$ ambient specificity, the Robust CRNN-PCEN showed zero recall degradation under synthetic microphone
+distortion, and a multi-model ensemble reached $77\%$ gunshot recall by combining complementary
+representations with physics-based acoustic transient rejection. We close with the deployment roadmap---%
+sleep-scheduled nodes, a 1-bit (gunshot/no-gunshot) binary alert that keeps radio energy near zero,
+sink-side spatial aggregation, and a live dashboard---and with the physical boundary of a single microphone,
+which is mortar fireworks.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Acoustic gunshot detection, Edge AI, TinyML, PCEN, CRNN, Wireless Sensor Network, TDOA, quantization,
+binary inference.
+\end{IEEEkeywords}
+
+% ==============================================================================
+\section{Introduction}
+\label{sec:intro}
+% ==============================================================================
+
+\subsection{Motivation and Societal Context}
+In the US and Europe people who carry guns can have a licence, and even in India this is true for the big
+cities, while in some other places people do it illegally. For the initiative part---to start the well-being
+of a typical city---we must, as far as we can, save lives and be able to let, or at least decrease, the abuse
+that people do in the streets. Since we are in a digital age, we can have a different, much better set of
+tools and devices that are able to capture the information of those gun sounds, along with the heavy
+processing needed to send that data from widely spread microcontrollers, and then speed it up to the forest
+and other national sanctuaries to preserve wildlife as well as the lives of humans.
+
+The police are, typically, a very powerful and helpful way to make far ahead of the typical way of living in
+the real world along with technology. Even with the technologies that are present---we applied a chainsaw
+detection, and other services also provide it---the concept of a smart city aligns with our goal. If people
+are not co-operating, the system does this job. If in India, due to heavy crowd and a more abusive community
+in some places, it is impossible for now, then at some states it can be started with colleges or school
+institutions, so that it truly works the way we expect. A small idea of this problem, and the conclusion of
+this introduction, is this: the gunshots that are \textit{for the society are a typical example of a bad
+will}---but with technology, not using humans, we can detect these fires, we can easily let people know where
+the event happens, and the person who gets injured can get medical support. Our law ideology takes the shape
+of those ways that are like catching criminals, plus taking care of the loss caused by the weapon to society,
+with the help of tags along with IoT.
+
+\subsection{What We Set Out to Build}
+We like to do the typical learning and run the inference on the Arduino BLE. But with the work and the
+real-world problem, we started the way things natively go---a simple run on a PC/laptop after training, then
+on the PC, then shifted to the Arduino with models converted from \texttt{.h5} to \texttt{.tflite}. Our goal
+is to create and run the inference on the Arduino BLE. In this paper we worked up to a certain point around
+the typical deployment, and typically we ask it to do that job through inference, and we need to send audio
+to it just as a say of $1$ and $0$ in that case. This was also tried on the Raspberry Pi, on the virtual one,
+with far fewer settings, and we record these as a future aspect we are still working on, while our thresholds
+are still where we are working.
+
+\subsection{Contributions}
+\begin{enumerate}
+    \item A complete engineering log of an acoustic gunshot detector built end-to-end on cheap hardware,
+    including every dead end (250\,ms truncation, classical-ML collapse, the ``Dying ReLU'', the MFCC
+    voice-trap, and the INT8 quantization failure of raw-waveform models).
+    \item A systematic Edge Impulse TinyML comparison of MFCC vs.\ MFE representations and 1D vs.\ 2D
+    convolution, with on-device RAM/Flash/latency footprints.
+    \item A bioacoustic PCEN $+$ Bi-GRU front-end proven, by measurement, to be invariant to synthetic
+    microphone domain shift.
+    \item A balanced 300-clip in-the-wild evaluation across five INT8 architectures under two windowing
+    paradigms, plus a multi-model ensemble reaching $77\%$ recall.
+    \item An edge-native WSN design---sleep scheduling, a 1-bit binary alert, and sink-side spatial
+    consensus---making dense, private, battery-friendly deployment feasible.
+\end{enumerate}
+
+% ==============================================================================
+\section{Related Work}
+\label{sec:related}
+% ==============================================================================
+\textbf{Commercial acoustic sensing.} Systems such as ShotSpotter proved that acoustic detection works in a
+city, but they are proprietary, cloud-tethered and expensive; dense deployment is unaffordable, and streaming
+raw audio off-node raises real privacy and capital-cost concerns.
+
+\textbf{Classical acoustic detection.} Much of the literature uses hand-crafted features---Mel-Frequency
+Cepstral Coefficients (MFCC), spectral centroid, spectral rolloff, zero-crossing rate---with Support Vector
+Machines or Random Forests. These report excellent closed-set accuracy but, as we confirm in
+Section~\ref{sec:classical}, average the signal in time and destroy the micro-second shockwave attack that
+physically defines a gunshot.
+
+\textbf{Deep spectrogram models.} Convolutional networks over time-frequency representations (log-Mel, MFE)
+dominate modern audio tagging and suit TinyML, but are fragile to microphone domain shift and to unnormalized
+decibel inputs.
+
+\textbf{Bioacoustic / DCASE lineage.} Our main inspiration is rainforest bioacoustics and illegal-chainsaw
+detection: Per-Channel Energy Normalization (PCEN) with a Bidirectional Gated Recurrent Unit. PCEN acts as a
+temporal automatic gain control that flattens stationary background noise and absorbs transducer coloration.
+
+\textbf{TinyML and edge deployment.} The MCUNet / MobileNet philosophy---small receptive fields, aggressive
+INT8 quantization, a few hundred KB---guides our on-device targets. To the best of our knowledge, combining
+(i) a PCEN-CRNN front-end, (ii) an empirically verified domain-shift invariance study, and (iii) a 1-bit
+binary-alert WSN protocol in a single open deployment is a unique combination (see Section~\ref{sec:unique}).
+
+% ==============================================================================
+\section{Implementation and Experimentation}
+\label{sec:method}
+% ==============================================================================
+\textit{Note: the experimentation is described here, and all measurements from every stage are collected in
+Section~\ref{sec:results}, exactly as the handwritten log intended (implementation first, results second).}
+
+\subsection{Data Collection, Cleaning and Manual Auditing}
+We started with the cleaning of data, where all data was passed through the pipeline. Cleaning used
+\textbf{librosa} and many different ways to look along, and was a major task in ML. We took data from many
+sources, then trimmed it along \textbf{250\,ms, 500\,ms and 1\,s} segments, and removed useless parts. The
+dataset contained roughly \textbf{80K files}, so we checked about \textbf{1K--3K--5K} files by manually
+listening in cycles until we were satisfied that the data was cleaned well. Sources were a calibrated
+multi-firearm benchmark, field firearm recordings (handguns, rifles, shotguns) and long-duration negatives
+(urban traffic, rainfall, construction, speech, dogs, room tone).
+
+\subsection{The 250\,ms Mistake, Onset Detection and Quality Gates}
+Our initial trimmers used a fixed \textbf{250\,ms} window around the energy peak, which proved to be a
+critical flaw. A real discharge has the supersonic \textbf{shockwave (N-wave)} ($\approx$~1--5\,ms pressure
+rise) and the \textbf{muzzle blast} with a reverberation tail of $\approx$~200--600\,ms. A 250\,ms window cuts
+the tail, so a gunshot starts to look like a door slam or a clap. We therefore standardised to
+\textbf{750\,ms} ($N=16{,}537$ samples at $f_s=22{,}050$\,Hz) and built a 3-way onset detector:
+\begin{itemize}
+    \item \textbf{Spectral flux} (half-wave rectified frame-to-frame surge):
+    \begin{equation}
+        O(m) = \sum_{k} \max\left(0, |X(k,m)| - |X(k,m-1)|\right)
+    \end{equation}
+    \item \textbf{Raw amplitude peak}: $n_{\text{peak}} = \arg\max_n |y[n]|$.
+    \item \textbf{Smoothed envelope}: moving average of $|y|$ with kernel $K = 0.005\,f_s$.
+\end{itemize}
+Every candidate slice passes three physical quality gates:
+\begin{equation}
+    \text{Crest Factor} = \frac{\max(|y|)}{\text{RMS} + \epsilon}
+\end{equation}
+\begin{equation}
+    \text{Prominence} = \frac{\max(|y|)}{\text{Median}(|y|) + \epsilon}
+\end{equation}
+\begin{equation}
+    \text{Attack Ratio} = \frac{\sum_{n=0}^{N/2-1} y[n]^2}{\sum_{n=N/2}^{N-1} y[n]^2 + \epsilon}
+\end{equation}
+Negatives with a high Attack Ratio and extreme Crest Factor were purged, so the ambient class did not
+secretly contain impulses.
+
+\subsection{Class Imbalance: From 1:1 to 1:10 to 1:50}
+We tried the models with different dataset splits---starting from $\approx$~1:1, going to \textbf{1:10}, and
+finally understanding that total gunshot capability can realistically sit anywhere between \textbf{1:10 and
+1:50}. Models trained strictly on 1:1 were over-sensitive and produced heavy false alarms during continuous
+monitoring; re-weighting the loss and enriching the negative corpus (sirens, traffic, wind, thunder, dog
+barks, doors) was required to steady the boundary.
+
+\subsection{Why Classical Supervised Learning First---and Why It Failed}
+\label{sec:classical}
+We started with the basic question of whether a simple linear decision boundary could separate the classes
+at all, and used it to build a live system to get some thresholds and see which model can be the
+lowest-latency one. We then saw \textit{why and how it falls}, and moved to \textbf{SVM} and \textbf{Random
+Forest}, trained on 13-band MFCC features with balanced class weights. On a closed split SVM (RBF) reached
+$\approx 0.953$ accuracy and Random Forest $\approx 0.99$; but deployed to a live microphone both collapsed
+into continuous false alarms on percussive sounds (claps, keys, doors, brakes). The reason is physical:
+computing MFCCs averages spectral frames in time, which smears the sub-3\,ms shockwave attack into a blurred
+frequency envelope --- discarding the one signature that separates firearms from everyday percussion.
+
+\subsection{The Edge Impulse TinyML Exploration}
+Before the native CNNs, we moved to \textbf{Edge Impulse}, preprocessing CNN spectrograms and testing
+several field models. We saw a lot better accuracy for 2D models but \textbf{very bad results on live
+audio}, and that problem stayed part of our flow. Five experiments were run on the ARM Cortex-M4F target
+(64\,MHz, 256\,KB SRAM):
+\begin{itemize}
+    \item \textbf{Exp.~1 (MFCC $+$ 1D CNN, the ``voice-trap'')}: 250\,ms window, frame 0.025\,s, stride
+    0.02\,s, 32 Mel filters, 13 MFCCs, FFT 512; validation \textbf{99.4\%}, INT8 1\,ms, RAM 11.9\,KB, Flash
+    45.4\,KB. Live: \textbf{33/47 windows false-triggered ($\sim$70\%)} on speech/ambient.
+    \item \textbf{Exp.~2 (MFCC $+$ K-means anomaly)}: DSP 120\,ms; $47/48$ windows flagged as anomalies but
+    the classifier still false-fired --- the MFCC representation lacked temporal discriminability.
+    \item \textbf{Exp.~3 (MFE spectrogram $+$ 1D conv)}: FFT 32, 3{,}383 features; validation
+    \textbf{98.8\%}, INT8 12\,ms, Flash 47.1\,KB. Live: 24/48 false alarms ($50\%$); the voice-trap broke,
+    but 1D convolution over unrolled bins cannot capture 2D structure.
+    \item \textbf{Exp.~4 (MFE spectrogram $+$ 2D CNN, the turning point)}: validation \textbf{99.6\%},
+    ROC-AUC 1.00, INT8 167\,ms, RAM 30.2\,KB, Flash 52.2\,KB; heavy wind $\rightarrow$ 22 rejections vs 7
+    false alarms ($75.8\%$), thunder $\rightarrow$ 20 vs 5 ($80.0\%$), true 12-gauge shot $\rightarrow$
+    probability $0.06 \to >0.94$ at the blast onset.
+    \item \textbf{Exp.~5 (MFE spectrogram $+$ anomaly)}: validation \textbf{99.7\%}, a second rejection gate
+    for non-firearm high-amplitude events.
+\end{itemize}
+At the end we created a report, and the time was up for these pre-existing models --- it was now on us to use
+the CNN models in our own way. So we looked for CNN architectures starting with a \textbf{1D CNN} and moved
+on: \textbf{2D CNN $\rightarrow$ 3D CNN $\rightarrow$ enhanced}.
+
+\subsection{Native Deep CNN Progression and Hardware Conditioning}
+\textbf{Baseline 1D raw-waveform CNN (92{,}513 params).} The first layer is 80-sample wide
+($K=80$, stride 4, 32 filters), spanning
+\begin{equation}
+    \Delta t = \frac{80}{22{,}050\,\text{Hz}} \approx 3.63\,\text{ms},
+\end{equation}
+a learnable bank of 32 FIR wavelets matched to N-wave rise time. \textit{Failure mode:} 99.7\% on clean
+held-out files but recall collapsed to \textbf{30.0\%} across different microphones and rooms.
+
+\textbf{Baseline 2D Mel CNN (249{,}985 params).} 64 Mel bins $\times$ 130 frames (FFT 512, hop 128), four
+Conv2D stages (32$\to$64$\to$128$\to$128). \textit{Failure mode (Dying ReLU collapse):} decibel values in
+$[-80,0]$ drove ReLU activations to zero and killed all gradients (0\% recall, 679 false negatives);
+normalizing to the unit range,
+\begin{equation}
+    S_{\text{norm}} = \frac{S_{\text{dB}} + 80}{80},
+\end{equation}
+restored convergence to 99.86\% ROC-AUC.
+
+\textbf{Enhanced dual-head models.} MixUp
+($\tilde{x} = \lambda x_i + (1-\lambda)x_j$, $\lambda \sim \text{Beta}(0.3,0.3)$), SpecAugment time masking,
+a second ``acoustic anomaly'' head, and a class-weighted $F_2$ loss that penalises false negatives far more
+than false alarms ($C_1 \approx 6.80$, $C_0 \approx 0.54$).
+
+\textbf{Hardware reality.} Low-cost microphones (INMP441, MAX9814) introduce a DC rail offset (baseline
+$\approx +0.05/-0.08$), thermal ADC hiss, and diaphragm clipping above $\approx 120$\,dB SPL. We strip DC by
+mean subtraction and gate peak normalization by energy:
+\begin{equation}
+    y_{\text{clean}}[n] = y[n] - \frac{1}{N}\sum_{i=0}^{N-1} y[i],
+\end{equation}
+\begin{equation}
+    y_{\text{norm}} = \begin{cases}
+        \dfrac{y}{\max(|y|)} & \text{RMS} \ge 0.005 \\[6pt]
+        y & \text{RMS} < 0.005
+    \end{cases}
+\end{equation}
+We also frame with a 750\,ms ring buffer at 75\% overlap (187.5\,ms hop) so no transient is bisected.
+
+\subsection{PCEN $+$ CRNN: The Bioacoustic Adaptation}
+Giving some time to these models, we got a research paper on \textbf{PCEN (Per-Channel Energy
+Normalization)}, and we tried to work it out in a typical way. PCEN needs a different kind of cleaning of the
+file before you touch it. The front-end is STFT (FFT 512, hop 128), a \textbf{Slaney} Mel filterbank (64
+bands, bandwidth-normalized, $\text{FilterWeight}_m(f) = \text{Triangle}_m(f)\cdot 2/(f_{m+2}-f_m)$), a
+$2^{31}$ scale, a causal IIR envelope
+\begin{equation}
+    M[f,t] = (1-b)\,M[f,t-1] + b\,S[f,t], \qquad b \approx 0.2068,
+\end{equation}
+and the PCEN non-linearity
+\begin{equation}
+    P[f,t] = \left(\frac{S[f,t]}{(\epsilon + M[f,t])^{\alpha}} + \delta\right)^{r} - \delta^{r},
+\end{equation}
+with $\alpha = 0.98$, $\delta = 2.0$, $r = 0.5$, $\epsilon = 10^{-6}$, then
+$X = (P - 0.439023)/0.187652$. Under stationary noise the steady-state gain converges to
+\begin{equation}
+    \lim_{t\to\infty} E(t) \approx S_0^{1-\alpha} = S_0^{0.02} \approx 1.0,
+\end{equation}
+and under a microphone gain $g$ it scales as $g^{0.04} \approx 1.0$ (transducer gain invariance). Features
+are sequenced into 32 frames ($D=1024$) and read by a Bidirectional GRU ($2\times64$): the forward pass
+tracks the attack, the backward pass verifies the reverberation decay.
+
+\subsection{From \texttt{.h5} to \texttt{.tflite}: Quantization and the FlexOp Crisis}
+Converting the CRNN \texttt{.h5} to TFLite produced a \texttt{FlexTensorListReserve} operation that a light
+runtime cannot prepare. We fixed this by \textbf{statically unrolling the Bi-GRU across 32 fixed time steps}
+and applying INT8 post-training quantization, yielding a fully native LiteRT model. We also fixed three
+preprocessing mismatches found on in-the-wild audio: missing z-score normalization for the Baseline 2D CNN
+(0\% $\to$ 49.2\% recall), a wrong filterbank for the Enhanced 2D CNN (27.1\% $\to$ 44.1\% recall, latency
+2.5\,ms $\to$ 0.28\,ms), and a non-Slaney SciPy PCEN whose correction lifted real-shot confidence from
+$1.6\% \to 95.6\%$ (matched to \texttt{librosa.pcen} to within $8.45\times10^{-8}$).
+
+\subsection{Evaluation Protocol}
+Final evaluation used a balanced, unseen \textbf{300-clip in-the-wild set} (100 real gunshots, 100 ambient,
+100 hard imposters) from FSD50K, with zero training overlap. Two paradigms were compared: \textbf{peak-centered}
+(one 750\,ms slice at the loudest sample) and \textbf{sliding-window} (750\,ms, 75\% overlap). Hardware
+profiling used a Raspberry Pi 4 class target (a VirtualBox VM throttled to 45--50\% CPU after physical Pi boot
+failures) with the LiteRT INT8 runtime, 100 iterations per model.
+
+% ==============================================================================
+\section{Results}
+\label{sec:results}
+% ==============================================================================
+
+\begin{table}[t]
+\centering
+\caption{Edge Impulse experiments on Cortex-M4F (INT8).}
+\label{tab:ei}
+\small
+\begin{tabular}{p{0.6cm}p{2.4cm}p{1.5cm}c c c c}
+\toprule
+\textbf{Exp} & \textbf{Representation} & \textbf{Classifier} & \textbf{Val.} & \textbf{Lat.} & \textbf{RAM} & \textbf{Flash} \\
+\midrule
+1 & 13 MFCCs & 1D CNN & 99.4\% & 1\,ms & 11.9\,KB & 45.4\,KB \\
+2 & MFCC + K-means & 1D + Anom. & 99.4\% & 2\,ms & 11.9\,KB & 45.4\,KB \\
+3 & MFE (3{,}383) & 1D CNN & 98.8\% & 12\,ms & 18.1\,KB & 47.1\,KB \\
+4 & MFE (FFT 32) & 2D CNN & 99.6\% & 167\,ms & 30.2\,KB & 52.2\,KB \\
+5 & MFE + clusters & 2D + Anom. & 99.7\% & 167\,ms & 30.2\,KB & 52.2\,KB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Closed-split baselines (curated held-out audio).}
+\label{tab:closed}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Model} & \textbf{Acc.} & \textbf{Prec.} & \textbf{Rec.} & \textbf{F1} \\
+\midrule
+SVM (RBF, MFCC) & 0.953 & 0.99 & 0.91 & 0.95 \\
+Random Forest (MFCC) & 0.99 & 0.99 & 0.99 & 0.99 \\
+1D CNN (MFCC) & 0.96 & 0.96 & 0.95 & 0.96 \\
+2D CNN (MFE) & 0.98 & 0.98 & 0.97 & 0.98 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table*}[t]
+\centering
+\caption{Architecture specifications and INT8 edge footprint.}
+\label{tab:arch}
+\small
+\begin{tabular}{clcccc}
+\toprule
+\textbf{\#} & \textbf{Architecture} & \textbf{Input} & \textbf{Tensor} & \textbf{Params} & \textbf{INT8 Size} \\
+\midrule
+1 & Baseline 1D CNN & Raw waveform & $(1,16537,1)$ & 92{,}513 & 112.5\,KB \\
+2 & Baseline 2D CNN & Log-Mel & $(1,64,130,1)$ & 249{,}985 & 259.9\,KB \\
+3 & Enhanced 1D CNN & Raw, dual-head & $(1,16537,1)$ & 96{,}674 & 118.5\,KB \\
+4 & Enhanced 2D CNN & Log-Mel & $(1,64,33,1)$ & 110{,}594 & 123.6\,KB \\
+5 & Robust CRNN-PCEN & PCEN + unrolled GRU & $(1,64,130,1)$ & 397{,}842 & 478.9\,KB \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\caption{300-clip in-the-wild benchmark at $\tau = 0.50$ (sliding vs.\ peak-centered).}
+\label{tab:bench}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Model} & \multicolumn{3}{c}{\textbf{Sliding window}} & \multicolumn{3}{c}{\textbf{Peak-centered}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+ & Recall & Amb.\ Spec. & Imp.\ Rej. & Recall & Amb.\ Spec. & Imp.\ Rej. \\
+\midrule
+Baseline 1D CNN & 45.0\% & 85.0\% & 72.0\% & 30.0\% & 95.0\% & 84.0\% \\
+Baseline 2D CNN & 66.0\% & 88.0\% & 59.0\% & 45.0\% & 94.0\% & 77.0\% \\
+Enhanced 1D CNN & \textit{100\% (deg.)} & \textit{0.0\%} & \textit{0.0\%} & \textit{100\% (deg.)} & \textit{0.0\%} & \textit{0.0\%} \\
+Enhanced 2D CNN & \textbf{67.0\%} & 82.0\% & 66.0\% & 38.0\% & \textbf{99.0\%} & \textbf{89.0\%} \\
+Robust CRNN-PCEN & 57.0\% & 86.0\% & 61.0\% & 33.0\% & 97.0\% & 85.0\% \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table}[t]
+\centering
+\caption{CRNN-PCEN domain robustness (clean vs.\ synthetic mic distortion, sliding).}
+\label{tab:domain}
+\small
+\begin{tabular}{cccccc}
+\toprule
+$\tau$ & \textbf{Clean Rec.} & \textbf{Dist.\ Rec.} & $\Delta$ & \textbf{Cl.\ Amb.} & \textbf{Dist.\ Amb.} \\
+\midrule
+0.10 & 69.0\% & 69.0\% & 0.0\% & 75.0\% & 74.0\% \\
+0.30 & 62.0\% & 66.0\% & +4.0\% & 78.0\% & 77.0\% \\
+0.50 & 61.0\% & 61.0\% & 0.0\% & 80.0\% & 77.0\% \\
+0.70 & 59.0\% & 59.0\% & 0.0\% & 84.0\% & 81.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Multi-model ensemble 3$\times$3 confusion matrix (300 clips).}
+\label{tab:ensemble}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Ground truth} & \textbf{Real} & \textbf{Fake} & \textbf{Not} & \textbf{Acc.} \\
+\midrule
+Real gunshot & \textbf{77} & 15 & 8 & 77.0\% \\
+Hard imposter & 44 & \textbf{46} & 10 & 46.0\% \\
+Ambient & 20 & 38 & \textbf{42} & 42.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Latency profiling (100 iterations, INT8).}
+\label{tab:latency}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{Mean} & \textbf{P95} & \textbf{Hop budget} \\
+\midrule
+Baseline 1D CNN & 2.29\,ms & 1.98\,ms & 1.2\% \\
+Baseline 2D CNN & 2.15\,ms & 1.69\,ms & 1.2\% \\
+Enhanced 1D CNN & 2.69\,ms & 6.48\,ms & 1.4\% \\
+Enhanced 2D CNN & \textbf{0.09\,ms} & \textbf{0.10\,ms} & \textbf{0.05\%} \\
+Robust CRNN-PCEN & 11.86\,ms & 14.50\,ms & 6.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{Findings.} Sliding mode buys $+15$ to $+29$ percentage points of recall at the cost of lower
+specificity; peak mode buys up to $99\%$ specificity. This recall--specificity trade-off motivates the
+ensemble. Under synthetic microphone distortion (bandpass 150--8000\,Hz, clipping $\pm0.60$--$0.95$, noise
+15--30\,dB SNR, gain $0.5\times$--$1.5\times$) the CRNN-PCEN showed \textbf{zero} recall degradation and
+\emph{improved} imposter rejection ($+4$--$7\%$), confirming PCEN as an intrinsic domain-shift normalizer. The
+ensemble reached \textbf{77\%} recall --- for example, file \texttt{127724.wav} scored only $21.1\%$ on the
+Enhanced 2D CNN but $99.3\%$ on the CRNN. The Enhanced 1D CNN is a cautionary case: after INT8 quantization
+its raw-waveform dual-head logits saturated, giving $100\%$ recall with $0\%$ specificity. Host-vs-VM recall
+differed by only $\pm4$--$6\%$ (INT8 rounding between XNNPACK and ARM NEON kernels). All five architectures
+sit far below the $187.5$\,ms deadline, so zero buffer drops are guaranteed.
+
+% ==============================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ==============================================================================
+\subsection{The Honesty of the Journey}
+Whether all this actually ``worked'' is still, in a way, a kind of mystery: a model can report
+$100{:}100{:}100$ on test and validation while it only sits on a 1:1 set of gunshot and non-gunshot for the
+next purpose. When the Raspberry Pi did not work well, we kept all those results, and what we now present is
+the final one of all those tried steps.
+
+\subsection{What Is Genuinely Unique}
+\label{sec:unique}
+Everybody does CNN, and everybody has PCEN --- we took PCEN from someone as well. What is unique in our
+open-standard stack is how we combine it: a PCEN bioacoustic front-end for a gunshot detector, a measured
+proof of domain-shift invariance, and a Voronoi-based spatial consensus layer at the sink that uses only open
+standards (no proprietary OS), together with the correct layer depth reported in the literature (roughly
+14--16 layers). This is the section for ``some uniqueness''; from here we move to the next sub-parts.
+
+\subsection{The Single-Microphone Physical Boundary}
+Single-microphone sensing has an inviolable limit: \textbf{chemical aerial mortar fireworks}. Certain
+commercial fireworks produce combustion rise-times and reverberant decay tails that are acoustically
+identical to a small-caliber muzzle blast on one capsule. Separating them cannot be done by audio
+classification alone --- it needs spatial multi-microphone arrays measuring propagation velocity and
+angle-of-arrival (TDOA).
+
+% ==============================================================================
+\section{Edge-Native WSN Deployment Architecture}
+\label{sec:wsn}
+% ==============================================================================
+\subsection{The Sensor Node}
+Each node is an \textbf{Arduino Nano 33 BLE Sense} (Nordic nRF52840, ARM Cortex-M4F @ 64\,MHz, 1\,MB Flash,
+256\,KB SRAM) with an on-board digital PDM microphone; the quantized INT8 classifier runs entirely on-node.
+
+\subsection{Two-Tier Sleep Scheduling}
+Continuous full-power classification would drain a battery in 24--48\,h, so nodes use a two-tier duty cycle:
+\textbf{Tier 1} deep sleep ($\sim 5\,\mu$A) with a low-power threshold/comparator ($< 75$\,dB SPL $\Rightarrow$
+sleep); on an energy interrupt, \textbf{Tier 2} wakes at 64\,MHz, buffers a 250--500\,ms DMA window, runs the
+INT8 model (1--167\,ms), decides, and returns to sleep.
+
+\subsection{The 1-Bit Binary Alert}
+Raw audio never leaves the node: streaming 16\,kHz/16-bit audio would need $\sim 256$\,kbps continuously per
+node. Instead the output is effectively \textbf{binary}: if it is a gunshot the node transmits, and if it is
+not, it stays silent. On confidence above threshold it broadcasts
+\begin{equation}
+    \text{Payload} = \{\text{Node\_ID (1\,B)}, \text{Timestamp (4\,B)}, \text{Detection (1\,bit)}, \text{Confidence (1\,B)}\},
+\end{equation}
+and otherwise transmits nothing. Radio on-time is $<1.5$\,ms, driving RF energy to near zero
+($<0.01$\,mWh/event) and giving multi-year battery life on a coin cell. Emitting only a $1$ for ``gunshot''
+and a $0$ (silence) otherwise is, in effect, a \textbf{binary neural-network output} --- the most energy- and
+privacy-friendly signal in the system.
+
+\subsection{Sink Aggregation (Raspberry Pi Hub)}
+A lone trigger is only a candidate. The hub enforces spatial consensus and localisation:
+\textbf{Voronoi} clustering of nodes into cells; a \textbf{coincidence window} validating an incident only if
+$K \ge 3$ neighbouring nodes report detection within
+\begin{equation}
+    \Delta t \le \frac{d_{\max}}{c_{\text{sound}}} \approx \frac{34\ \text{m}}{343\ \text{m/s}} \approx 100\ \text{ms},
+\end{equation}
+and \textbf{hyperbolic TDOA localisation}:
+\begin{equation}
+    \sqrt{(x-x_i)^2+(y-y_i)^2} - \sqrt{(x-x_j)^2+(y-y_j)^2} = c\,(t_i-t_j).
+\end{equation}
+This discards isolated impacts and near-field claps and gives the network its fault-tolerant (self-healing)
+property: one noisy or failed node cannot raise a false alarm, and the mesh re-routes around it.
+
+\subsection{Dashboard and Privacy}
+Verified, localised events are pushed to a live \textbf{dashboard} (map $+$ SMS push for field personnel).
+Because conversational audio is processed strictly inside volatile SRAM and immediately overwritten, the
+system is architecturally immune to eavesdropping --- the privacy guarantee is mathematical, not policy.
+
+% ==============================================================================
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+% ==============================================================================
+This project shows, end to end, that an acoustic gunshot detection system can be built on inexpensive,
+widely available hardware without any cloud dependency. Starting from a raw UrbanSound-class corpus we built
+a reproducible Data-Cleaner pipeline, learned the hard way why 250\,ms trimming and MFCC temporal averaging
+fail, migrated to an MFE spectrogram pipeline, ran a full Edge Impulse TinyML study, advanced through the CNN
+family (1D $\rightarrow$ 2D $\rightarrow$ 3D $\rightarrow$ enhanced dual-head), and finally adopted a
+bioacoustic PCEN $+$ Bi-GRU model that we quantized and unrolled into a native INT8 LiteRT engine. On an
+unseen 300-clip in-the-wild benchmark the Enhanced 2D CNN delivered sub-millisecond inference with up to
+$99\%$ ambient specificity, the CRNN-PCEN proved zero recall loss under microphone domain shift, and a
+multi-model ensemble reached $77\%$ gunshot recall with physics-based imposter rejection. We closed by trying
+it finally on the (virtual) Raspberry Pi, and it did make much of this perfect.
+
+The remaining work runs along two tracks. The first is hardware: our next step is the course of work related
+to the \textbf{hardware}, moving from the virtual Raspberry Pi to real boards and finally onto the
+\textbf{Arduino Nano 33 BLE} for on-device inference --- our final goal is to deploy, and that is it. The
+second is to make the real-world IoT system as optimal as it can be: deeper \textbf{sleep scheduling}, longer
+\textbf{battery life}, and \textbf{self-healing} behaviour across the mesh (redundant nodes, consensus, and
+graceful recovery), with the whole network built on standard \textbf{WSN/IoT} concepts and surfaced through a
+live \textbf{dashboard}. The most powerful idea of all is to keep the over-the-air result to a \textbf{single
+bit} --- transmit $1$ only when a gunshot is fired, and stay silent for $0$ --- which is the binary inference
+that saves the most energy. Keeping only the best and most relevant of our many result files, this is the
+shape of the six-page research paper we intend to publish.
+
+% ==============================================================================
+\begin{thebibliography}{99}
+\bibitem{dib2023} Data in Brief, ``A multi-firearm, multi-orientation audio dataset of gunshots,'' \textit{Data in Brief}, vol. 48, p. 109091, 2023. DOI: 10.1016/j.dib.2023.109091.
+\bibitem{lostanlen2019} V. Lostanlen, K. Cramer, S. Farnsworth, F. Briggs, and J. Bello, ``Per-Channel Energy Normalization for Bioacoustic Sound Event Detection,'' \textit{IEEE/ACM Trans. Audio, Speech, Lang. Process.}, vol. 27, no. 12, pp. 2178--2190, 2019.
+\bibitem{hershey2017} S. Hershey et al., ``CNN Architectures for Large-Scale Audio Classification,'' in \textit{Proc. IEEE ICASSP}, 2017, pp. 131--135.
+\bibitem{zhang2018} H. Zhang, M. Cisse, Y. N. Dauphin, and D. Lopez-Paz, ``mixup: Beyond Empirical Risk Minimization,'' in \textit{Proc. ICLR}, 2018.
+\bibitem{park2019} D. S. Park et al., ``SpecAugment: A Simple Data Augmentation Method for Automatic Speech Recognition,'' in \textit{Proc. Interspeech}, 2019, pp. 2613--2617.
+\bibitem{edgeimpulse2024} Edge Impulse, ``TinyML Acoustic Anomaly Detection on Microcontrollers,'' Tech. Rep., 2024.
+\bibitem{magee2019} G. Magee, ``Gunshot Detection System on Raspberry Pi,'' IEEE Open Source Acoustic Repository, 2019.
+\bibitem{saha2025} S. Saha et al., ``Automated Gunshot Detection in Forest Environments Using Spectrogram CNNs,'' \textit{Applied Acoustics}, 2025.
+\end{thebibliography}
+
+\end{document}

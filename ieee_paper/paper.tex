@@ -193,42 +193,170 @@ CRNN-PCEN & 397{,}842 & 478.9\,KB & Robust (11.86\,ms) \\
 \end{tabular}
 \end{table}
 
-\subsection{Baseline 1D Raw-Waveform CNN}
-Operates directly on 16{,}537 raw audio samples. The first convolutional layer uses an 80-sample kernel ($K=80$, stride $S=4$, 32 filters). At $f_s = 22{,}050\,\text{Hz}$, this spans:
+\subsection{Baseline 1D Raw-Waveform CNN (92{,}513 Parameters)}
+This model operates directly on 16{,}537 raw audio samples, bypassing spectral transformation entirely. Table~\ref{tab:arch_1d} details the layer-by-layer topology.
+
+\begin{table}[!t]
+\centering
+\caption{Baseline 1D CNN architecture (\texttt{1D\_CNN\_GunShot\_Detector}).}
+\label{tab:arch_1d}
+\footnotesize
+\begin{tabular}{llcc}
+\toprule
+\textbf{Layer} & \textbf{Config} & \textbf{Output Shape} & \textbf{Params} \\
+\midrule
+Input & --- & $(16537, 1)$ & 0 \\
+Conv1D & $K\!=\!80$, $S\!=\!4$, 32 & $(4135, 32)$ & 2{,}592 \\
+BatchNorm & --- & $(4135, 32)$ & 128 \\
+MaxPool1D & $P\!=\!4$ & $(1033, 32)$ & 0 \\
+Conv1D & $K\!=\!3$, 64 & $(1033, 64)$ & 6{,}208 \\
+BatchNorm & --- & $(1033, 64)$ & 256 \\
+MaxPool1D & $P\!=\!4$ & $(258, 64)$ & 0 \\
+Conv1D & $K\!=\!3$, 128 & $(258, 128)$ & 24{,}704 \\
+BatchNorm & --- & $(258, 128)$ & 512 \\
+Conv1D & $K\!=\!3$, 128 & $(258, 128)$ & 49{,}280 \\
+BatchNorm & --- & $(258, 128)$ & 512 \\
+GlobalAvgPool1D & --- & $(128)$ & 0 \\
+Dense & 64, ReLU & $(64)$ & 8{,}256 \\
+Dropout & 0.4 & $(64)$ & 0 \\
+Dense & 1, Sigmoid & $(1)$ & 65 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The first convolutional layer uses an 80-sample kernel. At $f_s = 22{,}050\,\text{Hz}$, this spans:
 \begin{equation}
     \Delta t = \frac{80}{22{,}050} \approx 3.63\,\text{ms}
     \label{eq:kernel_duration}
 \end{equation}
-This layer functions as a learnable bank of 32~FIR filters tuned to supersonic N-wave rise times. Subsequent layers use $K=3$ convolutions and max-pooling. Global Average Pooling reduces dimensions before a 64-unit dense layer and sigmoid output.
+This layer functions as a learnable bank of 32~finite impulse response (FIR) filters, each wide enough to capture the full rise-time of a supersonic N-wave shockwave. The stride of 4 provides $4\times$ temporal downsampling while preserving transient onset positions. Subsequent $K\!=\!3$ convolutions with BatchNormalization refine local acoustic patterns. Max-pooling is applied only after the first two convolutional blocks to preserve temporal resolution during the rapid attack--decay transition. Global Average Pooling compresses 258 time steps into a single 128-dimensional feature vector before the classification head, providing superior generalization compared to flattening.
 
-\subsection{Baseline 2D Mel-Spectrogram CNN}
-Transforms audio into a 64-band log-mel spectrogram over 130~time frames ($N_{\text{fft}} = 512$, hop $H = 128$). Four Conv2D stages ($32 \to 64 \to 128 \to 128$) extract time-frequency representations.
+\subsection{Baseline 2D Mel-Spectrogram CNN (249{,}985 Parameters)}
+This model transforms raw audio into a 2D time-frequency representation: a 64-band log-mel spectrogram over 130~time frames ($N_{\text{fft}} = 512$, hop $H = 128$). Table~\ref{tab:arch_2d} details the architecture.
 
-An early training run fed unnormalized decibel values ($-80$ to $0$\,dB) into ReLU activations, producing the ``Dying ReLU'' collapse: 0\% recall (721 false negatives). Rescaling inputs to $[0,1]$:
+\begin{table}[!t]
+\centering
+\caption{Baseline 2D CNN architecture (\texttt{2D\_CNN\_LogMel}).}
+\label{tab:arch_2d}
+\footnotesize
+\begin{tabular}{llcc}
+\toprule
+\textbf{Layer} & \textbf{Config} & \textbf{Output Shape} & \textbf{Params} \\
+\midrule
+Input & --- & $(64, 130, 1)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 32 & $(64, 130, 32)$ & 320 \\
+BatchNorm & --- & $(64, 130, 32)$ & 128 \\
+MaxPool2D & $(2\!\times\!2)$ & $(32, 65, 32)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 64 & $(32, 65, 64)$ & 18{,}496 \\
+BatchNorm & --- & $(32, 65, 64)$ & 256 \\
+MaxPool2D & $(2\!\times\!2)$ & $(16, 32, 64)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 128 & $(16, 32, 128)$ & 73{,}856 \\
+BatchNorm & --- & $(16, 32, 128)$ & 512 \\
+Conv2D & $(3\!\times\!3)$, 128 & $(16, 32, 128)$ & 147{,}584 \\
+BatchNorm & --- & $(16, 32, 128)$ & 512 \\
+GlobalAvgPool2D & --- & $(128)$ & 0 \\
+Dense & 64, ReLU & $(64)$ & 8{,}256 \\
+Dropout & 0.4 & $(64)$ & 0 \\
+Dense & 1, Sigmoid & $(1)$ & 65 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Max-pooling is restricted to the first two convolutional blocks. Blocks 3 and 4 omit pooling to preserve temporal resolution during the rapid attack--decay transition of gunshot spectrograms. The 2D convolutions learn joint time-frequency patterns that 1D models cannot capture from raw waveforms.
+
+\textit{Dying ReLU Collapse}: An early training run fed unnormalized decibel values ($-80$ to $0$\,dB) into ReLU activations. Since ReLU outputs zero for all negative inputs, the entire input range produced zero activations, extinguishing all gradients and yielding 0\% recall (721 false negatives). Rescaling inputs to $[0,1]$:
 \begin{equation}
     S_{\text{norm}} = \frac{S_{\text{dB}} + 80}{80}
     \label{eq:norm_db}
 \end{equation}
 restored convergence to 99.86\% ROC-AUC.
 
-\subsection{Enhanced Dual-Head Multi-Task Models}
-The Enhanced architecture incorporates:
+\subsection{Enhanced Dual-Head Models}
+The Enhanced variants extend the baseline architectures with a shared backbone that branches into two classification heads after Global Average Pooling. Table~\ref{tab:arch_enh2d} shows the Enhanced 2D CNN (primary production model). The Enhanced 1D CNN shares the same 1D backbone with a dual-head split.
+
+\begin{table}[!t]
+\centering
+\caption{Enhanced 2D CNN architecture (\texttt{Enhanced\_2D\_CNN\_DualHead}).}
+\label{tab:arch_enh2d}
+\footnotesize
+\begin{tabular}{llcc}
+\toprule
+\textbf{Layer} & \textbf{Config} & \textbf{Output Shape} & \textbf{Params} \\
+\midrule
+Input & --- & $(64, 33, 1)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 16 & $(64, 33, 16)$ & 160 \\
+BatchNorm & --- & $(64, 33, 16)$ & 64 \\
+MaxPool2D & $(2\!\times\!2)$ & $(32, 16, 16)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 32 & $(32, 16, 32)$ & 4{,}640 \\
+BatchNorm & --- & $(32, 16, 32)$ & 128 \\
+MaxPool2D & $(2\!\times\!2)$ & $(16, 8, 32)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 64 & $(16, 8, 64)$ & 18{,}496 \\
+BatchNorm & --- & $(16, 8, 64)$ & 256 \\
+MaxPool2D & $(2\!\times\!2)$ & $(8, 4, 64)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 128 & $(8, 4, 128)$ & 73{,}856 \\
+BatchNorm & --- & $(8, 4, 128)$ & 512 \\
+GlobalAvgPool2D & --- & $(128)$ & 0 \\
+\midrule
+\multicolumn{4}{l}{\textit{Head 1: Gunshot Detection}} \\
+Dense & 64, ReLU & $(64)$ & 8{,}256 \\
+Dropout & 0.4 & $(64)$ & 0 \\
+Dense & 1, Sigmoid & $(1)$ & 65 \\
+\midrule
+\multicolumn{4}{l}{\textit{Head 2: Anomaly Score}} \\
+Dense & 32, ReLU & $(32)$ & 4{,}128 \\
+Dropout & 0.3 & $(32)$ & 0 \\
+Dense & 1, Sigmoid & $(1)$ & 33 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Enhanced architecture incorporates three regularization techniques:
 \begin{itemize}
-    \item \textbf{MixUp Augmentation}: Linear interpolation of sample pairs and labels:
+    \item \textbf{MixUp Augmentation}~\cite{zhang2018}: Linear interpolation of sample pairs and labels:
     \begin{equation}
         \tilde{x} = \lambda x_i + (1\!-\!\lambda) x_j, \quad \tilde{y} = \lambda y_i + (1\!-\!\lambda) y_j
         \label{eq:mixup}
     \end{equation}
     where $\lambda \sim \text{Beta}(0.3, 0.3)$, regularizing decision boundaries.
-    \item \textbf{SpecAugment} (2D path): Contiguous time and frequency masking to simulate buffer edge effects and bandpass filtering.
-    \item \textbf{Dual-Head Classification}: Primary gunshot probability head and secondary anomaly/novelty score head.
+    \item \textbf{SpecAugment}~\cite{park2019} (2D path): Contiguous time and frequency masking to simulate buffer edge effects and bandpass filtering.
     \item \textbf{Class-Weighted $F_2$ Loss}: False negatives penalized $12.5\times$ ($C_1 \approx 6.80$, $C_0 \approx 0.54$).
 \end{itemize}
 
-The Enhanced 1D variant suffered complete weight saturation during INT8 quantization---dilated 1D convolution filters with narrow dynamic ranges collapse under 8-bit precision, producing 100\% false alarms on all inputs including silence. The Enhanced 2D variant quantized successfully and serves as the primary production model.
+The dual loss function trains both heads simultaneously with a 1.0:0.3 weighting ratio (gunshot:anomaly). During inference, Head~1 provides the primary detection score. Head~2 provides an auxiliary novelty measure that can flag out-of-distribution inputs.
 
-\subsection{Robust CRNN-PCEN}
-Replaces the static log-mel front-end with Per-Channel Energy Normalization~\cite{lostanlen2019}:
+\textit{INT8 Quantization Failure (Enhanced 1D CNN)}: During post-training INT8 quantization, the Enhanced 1D variant suffered complete weight saturation. The wide 80-sample kernel in the first layer and the subsequent $K\!=\!3$ convolutions operate on raw waveform amplitudes in the range $[-1.0, +1.0]$. Under 8-bit precision, the narrow dynamic range of these filter weights collapses, causing the output to saturate near 1.0 for all inputs including silence. The 2D spectrogram-based variant, operating on $[0,1]$-normalized inputs, quantized with full fidelity. This documents that raw waveform 1D architectures are significantly more fragile under INT8 quantization than 2D spectrogram representations.
+
+\subsection{Robust CRNN-PCEN (397{,}842 Parameters)}
+This model replaces the static log-mel front-end with dynamic Per-Channel Energy Normalization (PCEN)~\cite{lostanlen2019} and adds a recurrent temporal sequence modelling stage. Table~\ref{tab:arch_crnn} details the full architecture.
+
+\begin{table}[!t]
+\centering
+\caption{Robust CRNN-PCEN architecture (\texttt{Robust\_CRNN\_PCEN}).}
+\label{tab:arch_crnn}
+\footnotesize
+\begin{tabular}{llcc}
+\toprule
+\textbf{Layer} & \textbf{Config} & \textbf{Output Shape} & \textbf{Params} \\
+\midrule
+Input & PCEN & $(64, 130, 1)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 32 & $(64, 130, 32)$ & 320 \\
+BatchNorm & --- & $(64, 130, 32)$ & 128 \\
+MaxPool2D & $(2\!\times\!2)$ & $(32, 65, 32)$ & 0 \\
+Conv2D & $(3\!\times\!3)$, 64 & $(32, 65, 64)$ & 18{,}496 \\
+BatchNorm & --- & $(32, 65, 64)$ & 256 \\
+MaxPool2D & $(2\!\times\!2)$ & $(16, 32, 64)$ & 0 \\
+Permute & $(2,1,3)$ & $(32, 16, 64)$ & 0 \\
+Reshape & --- & $(32, 1024)$ & 0 \\
+Bi-GRU & $2\!\times\!64$ & $(32, 128)$ & 418{,}560 \\
+GlobalAvgPool1D & --- & $(128)$ & 0 \\
+Dense & 64, ReLU & $(64)$ & 8{,}256 \\
+Dropout & 0.4 & $(64)$ & 0 \\
+Dense & 1, Sigmoid & $(1)$ & 65 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The PCEN front-end computes:
 \begin{equation}
     P[f,t] = \left( \frac{S[f,t]}{(\epsilon + M[f,t])^{\alpha}} + \delta \right)^{r} - \delta^{r}
     \label{eq:pcen}
@@ -244,9 +372,11 @@ Under stationary background noise $S_0$, the steady-state gain converges to:
     \lim_{t \to \infty} G(t) \approx S_0^{1 - \alpha} = S_0^{0.02} \approx 1.0
     \label{eq:steady_state}
 \end{equation}
-This mathematically flattens continuous ambient noise across all frequency channels. When microphone sensitivity changes by gain factor $g$, the output scales as $g^{0.04} \approx 1.0$, rendering the feature representation invariant across different hardware microphones.
+This mathematically flattens continuous ambient noise across all frequency channels. When microphone sensitivity changes by gain factor $g$, the output scales as $g^{0.04} \approx 1.0$, rendering the feature representation invariant across different hardware transducers.
 
-The PCEN features are processed by a Bidirectional GRU ($2 \times 64$ units). The forward pass tracks the rapid shockwave onset; the backward pass verifies the exponential reverberation decay, successfully rejecting sustained tonal sounds (sirens, vehicle horns). PCEN requires a stable background signal to track---badly trimmed clips with no stationary context give it nothing to normalize against, which is why data cleaning precedes this model.
+After the Conv2D spatial extraction, a Permute and Reshape operation converts the 2D feature maps into a temporal sequence of 32 time steps, each with a 1{,}024-dimensional feature vector ($16 \times 64$). The Bidirectional GRU ($2 \times 64$ units) processes this sequence in both directions: the forward pass tracks the rapid shockwave onset, while the backward pass verifies the exponential reverberation decay back to the attack point. This temporal bidirectionality successfully rejects sustained tonal sounds (sirens, vehicle horns) that lack the characteristic onset--decay asymmetry of a muzzle blast.
+
+Note that 84.5\% of the CRNN's parameters (418{,}560 of 397{,}842 total) reside in the Bi-GRU layer, making this the most parameter-heavy model. PCEN also requires a stable background signal to track---badly trimmed clips with no stationary context give it nothing to normalize against, which is why data cleaning precedes this model.
 
 \subsection{Edge Impulse Evaluation}
 Prior to the main TensorFlow models, five Edge Impulse configurations were evaluated on an ARM Cortex-M4F target (64\,MHz, 256\,KB SRAM). Table~\ref{tab:edgeimpulse} summarizes the progression.

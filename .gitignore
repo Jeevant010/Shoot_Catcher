@@ -214,10 +214,20 @@ Data/
 recordings/
 test_recording.wav
 detections_log.txt
+
+# Audio File
+My_Test_Audio/
+Verification_Outputs/
+Gunshots dataset (GSD)/
+custom_sound/
+External_Datasets/
+
+# Mic Test Outputs
+03_Mic_Test/test_output/
+03_Mic_Test/**/test_output/
+test_dataset/*
 /03_Mic_Test/scripts/test_output/*
 /docs/
 /Verification_Outputs/
 /custom_sound/
-/External_Datasets/
 /test_dataset/
-/My_Test_Audio/

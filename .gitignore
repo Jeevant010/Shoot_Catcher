@@ -224,6 +224,10 @@ External_Datasets/
 
 # Mic Test Outputs
 03_Mic_Test/test_output/
-03_Mic_Test/scripts/test_output/
 03_Mic_Test/**/test_output/
 test_dataset/*
+/03_Mic_Test/scripts/test_output/*
+/docs/
+/Verification_Outputs/
+/custom_sound/
+/test_dataset/

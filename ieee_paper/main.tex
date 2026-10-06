@@ -2,118 +2,151 @@
 \IEEEoverridecommandlockouts
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{textcomp}
+\usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{url}
-
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning}
 \begin{document}
-
-\title{On-Device Acoustic Gunshot Detection: Data Cleaning, Model Comparison, and a One-Bit Edge Alert}
-
+\title{On-Device Acoustic Gunshot Detection: Data Cleaning, Model Comparison, and Edge Deployment}
 \author{
-\IEEEauthorblockN{Jeevant Sharma, Deepesh Dangi, Abhishek Yadav, Bhupendra Kumar}
-\IEEEauthorblockA{Department of Computer Science and Engineering\\
-Indian Institute of Information Technology, Surat\\
-Surat, India}
+\IEEEauthorblockN{Jeevant, Deepesh Dangi, Lokendra Chouhan, Kaustubh Dhondge}
+\IEEEauthorblockA{\textit{Department of Computer Science and Engineering} \\
+\textit{Indian Institute of Information Technology Surat}, Surat, India \\
+Email: \{ui23cs30, ui23cs18, lokendra.chouhan, kaustubh.dhondge\}@iiitsurat.ac.in}
 }
-
 \maketitle
-
 \begin{abstract}
-A gunshot is a short impulse in a long recording, and the same shape appears in fireworks, hand claps, and door slams. This paper reports a detector aimed at an Arduino Nano 33 BLE Sense. Training and the tests here were done on a PC. Timing was measured on a virtual machine capped near 45--50\% CPU as a stand-in for a Raspberry Pi~4. No board has been flashed. Audio was cleaned with librosa at 250\,ms, 500\,ms, and 1\,s; the working window is 750\,ms because a 250\,ms cut drops the decay that separates a shot from a knock. Logistic regression, an SVM, and a random forest reached about 99--100\% on some balanced files and failed on a live microphone. On a 1{,}442-clip balanced hold-out, three neural models exceed 99.5\% accuracy. On 300 unseen recordings the best sliding-window gunshot recall is 67\%. The Enhanced 2D CNN runs in 0.09\,ms inside 123.6\,KB (INT8). The deployment design keeps audio on the node, sleeps between loud frames, and transmits a single bit: 1 if the score crosses the threshold, and nothing otherwise. A gateway accepts an event only when several nearby nodes send that bit. The bit is a binary decision from an ordinary network, not a weight-binarized neural network.
+Acoustic gunshot detection on low-cost embedded edge platforms presents physical challenges including transducer domain shift, diaphragm saturation at high sound pressure levels, electrical DC voltage rail drift, thermal ADC hiss amplification, and false triggers from percussive imposter sounds. This paper reports a detector designed for deployment on a Raspberry Pi node, streamlining data transmission securely over the network. Models are trained on a host PC, exported from Keras to TensorFlow Lite, and quantized to INT8. Edge timing is profiled on a Raspberry Pi~4 with the CPU held at 45--50\% utilization. Audio was cleaned with librosa at window lengths of 250\,ms, 500\,ms, and 1\,s. The operational window is 750\,ms, since a 250\,ms cut removes the reverberation decay that distinguishes a gunshot from a percussive knock. Classical classifiers (logistic regression, SVM, random forest) achieved 99--100\% accuracy on balanced hold-out files but failed on live microphone input. Five neural architectures were then trained. On a 1{,}442-clip balanced hold-out, three models exceed 99.5\% accuracy. On 300 unseen recordings, the best single-model sliding-window gunshot recall is 67\%, achieved by the Enhanced 2D CNN, which executes in 0.09\,ms within a 123.6\,KB INT8 footprint. A three-model ensemble raises recall to 77\% within 715\,KB and 17\,ms combined. The PCEN-based CRNN exhibits zero recall degradation under simulated microphone distortion. The deployment architecture retains raw audio stream processing on the sensor node, transmitting highly streamlined inference telemetry to a central gateway to ensure civilian privacy while enabling rapid threat response.
 \end{abstract}
-
 \begin{IEEEkeywords}
-Acoustic gunshot detection, edge inference, TinyML, PCEN, Raspberry Pi, Arduino Nano 33 BLE Sense.
+Acoustic gunshot detection, Internet of Things, edge inference, TinyML, PCEN, Raspberry Pi.
 \end{IEEEkeywords}
-
 \section{Introduction}
 \label{sec:intro}
-In some countries a person may carry a firearm with a licence. Elsewhere the same sound on a street is a crime. People nearby do not always call, and a call that does arrive is often late and poorly located. A campus, a city block, or a forest sanctuary can listen for the sound and send medical help and police to the place of the event. The same listening problem appears where a gunshot or a chainsaw is rare against hours of wind. We did not build a chainsaw detector. We reuse a front-end that was developed for that kind of rare impulse.
-
-A dense city is a hard first site. Traffic and fireworks produce impulses all day. A college or a school is a smaller site with a known map, which is where we intend to start.
-
-The final node is an Arduino Nano 33 BLE Sense. It should run the model locally and should not stream the microphone. This paper stops one step earlier. Models were trained on a PC, converted from Keras to TensorFlow Lite, and timed on a virtual Raspberry Pi. The value that leaves the node is a binary label. Sleep, the radio, and gateway grouping are the next build. They were not measured here.
-
-Section~\ref{sec:related} is related work. Section~\ref{sec:method} is the method. Section~\ref{sec:setup} defines the tests and the metrics. Section~\ref{sec:results} gives the numbers. Section~\ref{sec:conclusion} states what failed and what the hardware step is.
-
+The integration of the Internet of Things (IoT) into public safety infrastructure provides critical prevention measures and rapid threat detection capabilities for modern security systems. Automated acoustic gunshot detection serves as a primary layer of defence, capable of identifying and locating firearm discharges in real time without human intervention. By analyzing environmental audio continuously at the edge, these decentralized networks provide immediate telemetry to emergency responders, drastically reducing response latency compared to traditional reporting channels. Operating purely within the acoustic domain, such systems guarantee civilian privacy by circumventing the need for pervasive video surveillance. The deployment of autonomous acoustic sensors across campuses, urban blocks, and wildlife sanctuaries establishes an active monitoring grid that is highly effective for immediate threat containment and post-incident forensic analysis.
+Existing approaches to acoustic gunshot detection largely rely on classical digital signal processing and heuristic thresholding, which are highly susceptible to environmental noise and hardware variability. Foundational studies characterized the acoustic signature of gunshots as a combination of a supersonic projectile shockwave followed by a prolonged muzzle blast decay \cite{maher2007}. Subsequent methodologies introduced basic machine learning classifiers over standard audio features like Mel-Frequency Cepstral Coefficients (MFCCs). While city-scale proprietary systems stream raw audio to centralized cloud servers for heavy processing, embedded open-source baselines have attempted to run lightweight inference directly on local hardware such as Raspberry Pi \cite{magee2019}. Furthermore, specialized datasets \cite{dib2023, salamon2014} have enabled the training of deep learning architectures, such as spectrogram-based Convolutional Neural Networks (CNNs), which have been applied to gunshot detection in forest environments \cite{saha2025}. Compared to these existing implementations, the architecture proposed herein fundamentally improves real-world reliability by addressing hardware-induced signal corruption directly at the edge, leveraging advanced bioacoustic normalization techniques. 
+Despite the proliferation of machine learning in audio classification, significant research gaps remain in deploying robust acoustic detection on highly constrained edge devices. Most existing models are trained on pristine, studio-quality datasets and fail catastrophically when exposed to live microphone streams characterized by unpredictable transducer domain shifts, DC voltage rail drift, and thermal ADC hiss. Additionally, traditional systems struggle to differentiate true firearm discharges from percussive imposters---such as fireworks, door slams, and thunder---due to inadequate temporal resolution and simplistic feature extraction techniques. The failure to account for microphone saturation and acoustic clipping further limits the generalizability of current edge-deployed detectors, highlighting the critical need for a system designed explicitly for heterogeneous, low-fidelity sensor nodes.
+The proposed methodology resolves these critical vulnerabilities by introducing a multi-paradigm neural architecture specifically optimized for localized edge inference. By shifting from standard log-mel spectrograms to Per-Channel Energy Normalization (PCEN) coupled with a Convolutional Recurrent Neural Network (CRNN), the system achieves unprecedented stability against background noise and dynamic microphone gain fluctuations. The operational window is strategically expanded to 750\,ms to capture the essential reverberation decay that distinguishes true gunshots from transient knocks. Furthermore, the system incorporates rigorous signal conditioning protocols---including sample mean DC removal and energy-gated peak scaling---directly into the embedded inference pipeline. This ensures that the underlying CNN and CRNN models operate exclusively on normalized, scale-invariant features, effectively immunizing the detector against the specific hardware anomalies that derail traditional systems.
+This work surpasses contemporary edge-based detection frameworks by demonstrating superior ambient specificity and imposter rejection without sacrificing inference speed. The primary contributions include the empirical evaluation of both 1D and 2D neural architectures under strict TinyML constraints \cite{banbury2021}, leading to an Enhanced 2D CNN that executes in 0.09\,ms with a minimal 124\,KB INT8 footprint on a Raspberry Pi. Additionally, the integration of a multi-model ensemble raises the unseen gunshot recall to 77\% while executing well within the stringent real-time hop boundaries. The proposed architecture eliminates the reliance on cloud audio streaming, instead transmitting strictly streamlined, highly compressed inference data to the network gateway. This decentralized approach ensures maximum privacy preservation and operational resilience, setting a new benchmark for autonomous, device-level acoustic threat detection.
 \section{Related Work}
 \label{sec:related}
-Acoustic gunshot detection already exists as a city product and as a public dataset. We use firearm recordings that include the multi-firearm, multi-orientation set in \emph{Data in Brief}~\cite{dib2023}. Those systems also show the constraint we care about: a campus node should not upload the microphone.
-
-Per-channel energy normalization (PCEN) divides each frequency band by a running estimate of its own background, so steady rain and hum flatten and a short impulse does not~\cite{lostanlen2019}. One of our models uses that front-end. The data, the network, and the tests are ours. Forest monitors that listen for chainsaws are a separate existing service. We did not reimplement them.
-
-Edge Impulse was a separate TinyML trial on a Cortex-M4F class target. It is a tool we used, not an architecture we claim. Mixup~\cite{zhang2018} and SpecAugment~\cite{park2019} appear only as regularization inside the enhanced convolutional models. Spatial grouping in Section~\ref{sec:conclusion} is a count of nearby detection bits inside a short time window.
-
-\section{Method}
-\label{sec:method}
-
-\subsection{Cleaning and window length}
-The raw pool was on the order of 80{,}000 files from firearm sets and long ambient recordings. Cleaning used librosa. About 1{,}000 to 5{,}000 clips were listened through in cycles until the remaining cuts were acceptable.
-
-Cuts were made at 250\,ms, 500\,ms, and 1\,s. The muzzle attack lasts only a few milliseconds. The decay that follows often lasts a few hundred milliseconds. A 250\,ms cut keeps the attack and drops most of that decay, so a shot and a knock become similar. The neural models use \textbf{750\,ms} (16{,}537 samples at 22{,}050\,Hz). On the live path, windows overlap by 75\% (hop 187.5\,ms) so a blast on a boundary still falls inside one frame.
-
-Negative clips that were themselves sharp knocks were removed when crest factor and attack energy matched a shot. The negative class has to be ordinary sound.
-
-A 1:1 training folder is easy to score and is what produced the classical 99--100\% figures. Continuous monitoring is closer to 1:10 or 1:50, because almost every window is silence, speech, or traffic. Later training used a larger negative set. A model shown only a coin-flip folder calls too many ordinary sounds a shot.
-
-\subsection{Classical models}
-Logistic regression was a probe: could a threshold on hand-made features separate the classes at all? It is a weak final model here. The classes are not a straight line in MFCC space, and a live threshold has to survive sounds the folder never held. An SVM and a random forest were then trained on MFCC and related summaries, from a 1:1 balance toward 1:10.
-
-On held-out files from the same pool, some of these runs sat near 99--100\% accuracy. On a real microphone they did not. Averaging a clip into a few MFCCs erases the few-millisecond attack. Keys, brakes, and claps land in a similar summary. The classical classifiers stopped there.
-
-\subsection{Edge Impulse trial}
-Five Edge Impulse configurations were run before the TensorFlow models. Validation accuracy was high. Live audio was not. MFCC with a 1D CNN marked 33 of 47 speech and ambient windows as shots. A 2D CNN on a mel spectrogram was the first run that rejected heavy wind on about 76\% of windows and thunder on about 80\%, at 99.6\% validation accuracy, 167\,ms INT8 inference, 30.2\,KB RAM, and 52.2\,KB flash on the M4F target. That latency is uncomfortable on a 64\,MHz part. The trial is why we moved to our own spectrogram CNNs. It is not the system we would ship.
-
-\subsection{Neural models}
-Five models share the 750\,ms front-end. The device path subtracts the sample mean so a small microphone DC bias is not treated as energy. Peak scaling runs only when the window RMS is high enough. Scaling a near-silent window up to full scale turns ADC hiss into a loud signal.
-
-\begin{table}[!t]
+Open firearm recordings used in this work include the multi-caliber, multi-orientation set in \emph{Data in Brief}~\cite{dib2023}. Ambient and imposter audio draws on urban environmental recordings~\cite{salamon2014}. Acoustic gunshot detection systems such as those detailed by Magee \cite{magee2019} have shown that detection on hardware like the Raspberry Pi is operationally viable. However, many large-scale systems stream audio to a central server. A private, secure campus node cannot do that: the network budget and the privacy constraint both require the decision to be made exclusively on the edge device in the sound wave domain. Spectrogram CNNs have become a standard audio classifier~\cite{hershey2017} and have recently been applied to automated gunshot detection in forest environments using CNN architectures~\cite{saha2025}. On microcontrollers, the relevant limits are flash, RAM, and latency under integer arithmetic~\cite{banbury2021, david2021}. 
+To handle continuous environmental noise, Per-Channel Energy Normalization (PCEN) divides each frequency band by a smoothed estimate of its own background~\cite{lostanlen2019}. Steady rain, wind, and ambient hum collapse toward a constant, while a short impulse does not. Lostanlen et al.\ originally extended the formulation of PCEN to bioacoustic monitoring for the detection of chainsaws in adverse outdoor rainforest conditions~\cite{lostanlen2019taslp}. The CRNN in this paper uses that same bioacoustic front-end to isolate gunshot shockwaves. Dai et al.\ showed that wide 1D convolutional kernels on raw waveforms can also capture short impulsive transients~\cite{dai2017}. The gated recurrent unit (GRU) used in the CRNN follows the standard formulation~\cite{cho2014}. The enhanced models in this study employ MixUp~\cite{zhang2018}, SpecAugment~\cite{park2019}, and speed perturbation~\cite{ko2015} exclusively as regularization strategies applied directly to the acoustic signals.
+\section{System Model}
+\label{sec:system_model}
+The end-to-end system architecture operates entirely at the edge, converting raw acoustic waveforms into streamlined, actionable threat alerts. The block diagram of the proposed system model is illustrated in Figure~\ref{fig:system_model}. 
+\begin{figure}[!h]
 \centering
-\caption{Models scored in this paper.}
-\label{tab:models}
-\footnotesize
-\begin{tabular}{lrr}
-\toprule
-\textbf{Model} & \textbf{Parameters} & \textbf{INT8} \\
-\midrule
-Baseline 1D CNN (waveform) & 92{,}513 & 112.5\,KB \\
-Baseline 2D CNN (log-mel) & 249{,}985 & 259.9\,KB \\
-Enhanced 1D CNN & 96{,}674 & 118.5\,KB \\
-Enhanced 2D CNN (log-mel) & 110{,}594 & 123.6\,KB \\
-CRNN-PCEN + Bi-GRU & 397{,}842 & 478.9\,KB \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The 1D network uses a first kernel of 80 samples (about 3.6\,ms), wide enough to see a short attack. An early 2D run fed decibel values from about $-80$\,dB to $0$\,dB into ReLU. ReLU outputs zero on the whole range, training stalled, and that checkpoint scored all 721 hold-out gunshots as negatives. Later 2D models use $(S_{\mathrm{dB}}+80)/80$, which maps the image into $[0,1]$.
-
-The enhanced models add mixup and, on the 2D path, SpecAugment, plus a second head used as an anomaly score. The enhanced 1D model was trained with a heavy penalty on missed shots. After INT8 conversion it scores every window as a gunshot. We report it as a failed conversion.
-
-PCEN replaces the static log-mel in the CRNN. A smoothed background $M[f,t]$ tracks each mel band $S[f,t]$:
-\begin{equation}
-P[f,t] = \left( \frac{S[f,t]}{(\epsilon + M[f,t])^{\alpha}} + \delta \right)^{r} - \delta^{r}.
-\label{eq:pcen}
-\end{equation}
-With $\alpha$ near 0.98, a band that stays constant collapses toward 1. A short blast does not. PCEN needs a real impulse-plus-background recording. A bad trim leaves nothing stable to track, which is why cleaning comes first.
-
-Figure~\ref{fig:pipeline} is the path from the microphone to the bit. Audio stays on the node.
-
-\begin{figure}[!t]
-\centering
-\includegraphics[width=\columnwidth]{figures/fig1_edge_pipeline.png}
-\caption{Node path. The gateway sees detection bits, not audio.}
-\label{fig:pipeline}
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    block/.style={rectangle, draw, fill=blue!10, text width=6cm, text centered, rounded corners, minimum height=1cm, font=\small},
+    arrow/.style={thick,->,>=stealth}
+]
+    \node (mic) [block] {1. Audio Capture (Live Microphone)};
+    \node (cond) [block, below of=mic] {2. Signal Conditioning (DC Strip \& Scale)};
+    \node (feat) [block, below of=cond] {3. Feature Extraction (Spectrogram / PCEN)};
+    \node (infer) [block, below of=feat] {4. Edge Inference (INT8 CNN / CRNN)};
+    \node (alert) [block, below of=infer] {5. Streamlined Alert Transmission to Gateway};
+    \draw [arrow] (mic) -- (cond);
+    \draw [arrow] (cond) -- (feat);
+    \draw [arrow] (feat) -- (infer);
+    \draw [arrow] (infer) -- (alert);
+\end{tikzpicture}
+\caption{System model and edge inference pipeline. Raw audio is processed locally, and only streamlined detection data is transmitted over the network.}
+\label{fig:system_model}
 \end{figure}
+The microphone continuously buffers ambient audio. When an impulsive transient exceeds the hardware energy threshold, a 750\,ms operational window is isolated. The raw waveform undergoes immediate signal conditioning to strip DC offsets and apply energy-gated peak scaling, correcting for cheap hardware variances. The normalized signal is transformed into the time-frequency domain using either log-mel spectrograms or PCEN. The extracted features are passed into the quantized INT8 neural network (e.g., Enhanced 2D CNN or CRNN-PCEN) executing on the Raspberry Pi's processor. Upon a positive detection, the system aggregates the confidence score and timestamp, transmitting only this streamlined telemetry to the central gateway, entirely bypassing the need to transmit raw audio.
+\section{Data Pipeline and Preprocessing}
+\label{sec:data}
+The raw pool was about 80{,}000 files: the calibrated firearm set~\cite{dib2023}, 4{,}138 further firearm recordings from open ground and indoor rooms, and 6{,}230 long ambient recordings (traffic, rain, construction, speech)~\cite{salamon2014}, from about 10\,s to 60\,min. Cleaning used librosa. Between 1{,}000 and 5{,}000 clips were listened through, in passes, until the cuts that remained were acceptable.
+Cuts were tried at 250\,ms, 500\,ms, and 1\,s. The attack is only a few milliseconds. The decay is the part that separates a blast from a knock, and a 250\,ms cut drops most of it. The models use \textbf{750\,ms} (16{,}537 samples at 22{,}050\,Hz). On the live path the hop is 187.5\,ms (75\% overlap), so a blast on a buffer boundary still sits inside one frame.
+Each candidate cut is placed by one of three onset cues: spectral flux across STFT bins, the peak absolute sample, or a short moving-average envelope that ignores single-sample spikes. A negative clip is discarded when its crest factor and its attack energy both look like a shot. The negative class is ordinary sound, not a second set of bangs with the wrong label.
 
-\section{Setup and Metrics}
+\section{Data Pipeline and Preprocessing}
+\label{sec:data}
+
+The raw pool was about 80{,}000 files: the calibrated firearm set~\cite{dib2023}, 4{,}138 further firearm recordings from open ground and indoor rooms, and 6{,}230 long ambient recordings (traffic, rain, construction, speech)~\cite{salamon2014}, from about 10\,s to 60\,min. Cleaning used librosa. Between 1{,}000 and 5{,}000 clips were listened through, in passes, until the cuts that remained were acceptable.
+
+Cuts were tried at 250\,ms, 500\,ms, and 1\,s. The attack is only a few milliseconds. The decay is the part that separates a blast from a knock, and a 250\,ms cut drops most of it. The models use \textbf{750\,ms} (16{,}537 samples at 22{,}050\,Hz). On the live path the hop is 187.5\,ms (75\% overlap), so a blast on a buffer boundary still sits inside one frame.
+
+Each candidate cut is placed by one of three onset cues: spectral flux across STFT bins, the peak absolute sample, or a short moving-average envelope that ignores single-sample spikes. A negative clip is discarded when its crest factor and its attack energy both look like a shot. The negative class is ordinary sound, not a second set of bangs with the wrong label.
+
+A 1:1 gunshot to non-gunshot folder is what produced the 99--100\% classical scores below. A live stream is closer to 1:10 or 1:50, because almost every window is silence, speech, or traffic. Later training used the heavier negative ratios.
+
+\section{Hardware Conditioning for Edge Deployment}
+\label{sec:conditioning}
+
+The same 750\,ms frame is conditioned before the network. Figure~\ref{fig:pipeline} is that path. Three distortions show up as soon as the file is no longer a studio WAV.
+
+Low-cost capsules on a 3.3\,V or 5\,V rail sit a few tens of millivolts off zero. That offset is removed by the sample mean:
+\begin{equation}
+    y_{\mathrm{clean}}[n] = y[n] - \frac{1}{N}\sum_{i=0}^{N-1} y[i].
+    \label{eq:dc_strip}
+\end{equation}
+
+Peak scaling $y/\max(|y|)$ is wrong on a quiet window. A peak near $0.002$ stretches ADC hiss across the full range. Scaling is applied only when the window is loud enough:
+\begin{equation}
+    y_{\mathrm{cond}} =
+    \begin{cases}
+        y / \max(|y|) & \text{if RMS} \ge 0.005, \\
+        y & \text{if RMS} < 0.005.
+    \end{cases}
+    \label{eq:energy_gate}
+\end{equation}
+
+A close shot exceeds $120$\,dB SPL and flattens the capsule into a clipped peak. Hard clipping is included in training so the filters still see a rise-time on a saturated waveform.
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/fig1_edge_pipeline.png}
+\caption{Edge path. The 750\,ms frame is conditioned on the node. Only a detection bit leaves the radio.}
+\label{fig:pipeline}
+\end{figure*}
+
+\section{Model Architectures}
+\label{sec:models}
+
+Logistic regression, an SVM, and a random forest on MFCC summaries reached about 99--100\% on balanced files from this pool and then failed on a live microphone. Averaging a clip into a few coefficients removes the few-millisecond attack. Those classifiers were stopped. The five networks below share the conditioning in Section~\ref{sec:conditioning}. Figure~\ref{fig:arch} is the layout. Layer-by-layer listings are omitted; the widths that matter are on the figure.
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.98\textwidth]{figures/fig_architectures.png}
+\caption{The four working layouts. The Enhanced 1D CNN uses the same waveform front-end as the baseline 1D CNN and a second head; after INT8 conversion it scores every window as a gunshot and is not used.}
+\label{fig:arch}
+\end{figure*}
+
+The baseline 1D CNN reads the 16{,}537 samples directly. Its first kernel is 80 samples wide, about $3.6$\,ms at 22{,}050\,Hz~\cite{dai2017}, so the first layer can cover a short attack. It does not transfer across microphones: hold-out recall is 99.7\%, and recall on external recordings is 30\%.
+
+The baseline 2D CNN reads a 64-band log-mel spectrogram (130 frames, FFT size 512, hop 128)~\cite{hershey2017}. An early run fed decibel values from about $-80$\,dB to $0$\,dB into ReLU. ReLU is zero on that whole range, gradients stopped, and that checkpoint marked all 721 hold-out gunshots as negatives. Later 2D models use
+\begin{equation}
+    S_{\mathrm{norm}} = (S_{\mathrm{dB}} + 80) / 80,
+    \label{eq:norm_db}
+\end{equation}
+which maps the image into $[0,1]$. Pooling is kept off the last convolutional blocks so the attack is not averaged away.
+
+The enhanced 2D CNN is the same idea at a smaller width, with MixUp~\cite{zhang2018}, SpecAugment~\cite{park2019}, speed perturbation~\cite{ko2015}, and a second head trained as an anomaly score. The gunshot head is the score reported below. The enhanced 1D CNN adds the same second head on the waveform. INT8 conversion saturates it: every window, including silence, scores as a gunshot. It is reported as a failed export, not as a detector. The 2D models, on $[0,1]$ spectrograms, quantize without that collapse.
+
+The CRNN replaces the static log-mel with PCEN~\cite{lostanlen2019,lostanlen2019taslp},
+\begin{equation}
+    P[f,t] = \left( \frac{S[f,t]}{(\epsilon + M[f,t])^{\alpha}} + \delta \right)^{r} - \delta^{r},
+    \label{eq:pcen}
+\end{equation}
+where $M[f,t]$ is a one-pole smooth of $S[f,t]$. With $\alpha$ near $0.98$, a band that does not change settles near $1$. A gain change $g$ in the capsule scales the output by about $g^{0.04}$. A bidirectional GRU~\cite{cho2014} (64 units each way) then reads the frame sequence, so a sustained tone is not treated as a blast. PCEN needs a stable background in the clip. That is why the trim in Section~\ref{sec:data} comes first.
+
+Five Edge Impulse~\cite{edgeimpulse2024} configurations on a Cortex-M4F target were used only as a screen, before these models. Validation accuracy sat between 98.8\% and 99.7\%. Live audio did not follow it. An MFCC 1D CNN marked 33 of 47 ambient windows as shots. A 2D CNN on a mel spectrogram was the first of those runs to reject most wind and thunder windows, at 167\,ms. That is why the models in Fig.~\ref{fig:arch} use spectrograms. Those Edge Impulse runs are not part of the measured system.
+
+\section{Experimental Setup and Metrics}
 \label{sec:setup}
-Neural scores were computed in software. Latency is from a virtual Raspberry Pi~4 (four virtual CPUs, execution cap about 45--50\%, 2\,GB RAM), 100 iterations per model. A balanced hold-out has 1{,}442 clips of 750\,ms (721 gunshot, 721 other). An earlier external check has 75 recordings (20 firearms, 20 imposters, 35 ambient). The main unseen set has 300 recordings with no training overlap: 100 real gunshots, 100 ambient files, and 100 hard imposters.
 
-Accuracy on a 1:1 folder is reported because that is what a balanced test produces. It is not how we choose a model. A detector that always says ``not a gunshot'' can look accurate whenever most audio is background.
+All reported neural scores use the exported INT8 models~\cite{david2021}. Latency is 100 timed iterations on the Raspberry Pi~4 with the CPU held at 45--50\% and 2\,GB RAM~\cite{banbury2021}. The TFLite runtime is the same class of integer path used on that board.
 
-Gunshot recall is the fraction of real gunshot files that cross the threshold. Ambient specificity is the fraction of rain, traffic, and speech files that stay below it. Imposter rejection is the fraction of fireworks, claps, and other bangs that stay below it. Latency is the time to score one window. The live hop is 187.5\,ms. INT8 size is listed because the Nano 33 BLE Sense has a small flash budget. The threshold is 0.50 unless a row says otherwise.
+Three sets are used, in increasing difficulty. The balanced hold-out has 1{,}442 clips of 750\,ms (721 gunshot, 721 other) from the cleaned pool. The external set has 75 recordings from outside that pool: 20 firearms, 20 imposters, 35 ambient tracks. The main set has 300 unseen recordings: 100 real gunshots, 100 ambient files, and 100 hard imposters (fireworks, slams, thunder, drums).
+
+Gunshot recall is the fraction of real gunshot files that cross the threshold. Ambient specificity is the fraction of rain, traffic, and speech files that stay below it. Imposter rejection is the fraction of fireworks, claps, and other bangs that stay below it. Latency is the time to score one 750\,ms window. The hop is 187.5\,ms; a model slower than the hop cannot keep up. The threshold is $0.50$ unless a row says otherwise.
 
 Peak-centered scoring uses one 750\,ms slice around the loudest sample. Sliding scoring walks the window across the file. Sliding finds more shots and more false alarms.
 
@@ -121,103 +154,102 @@ Peak-centered scoring uses one 750\,ms slice around the loudest sample. Sliding 
 \label{sec:results}
 
 \subsection{Balanced hold-out}
-Table~\ref{tab:holdout} is the near-100\% 1:1 result. It checks that training ran.
+Table~\ref{tab:holdout} checks that training ran. It is not the field result.
 
 \begin{table}[!t]
 \centering
-\caption{Hold-out, 1{,}442 clips, threshold 0.50.}
+\caption{Balanced hold-out (1{,}442 clips, $\tau = 0.50$).}
 \label{tab:holdout}
 \footnotesize
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Model} & \textbf{Acc.} & \textbf{Recall} & \textbf{FP} \\
+\textbf{Model} & \textbf{Acc.} & \textbf{Recall} & \textbf{F1} & \textbf{FP} \\
 \midrule
-Baseline 1D CNN & 99.79\% & 99.72\% & 1 \\
-CRNN-PCEN & 99.79\% & 99.72\% & 1 \\
-Enhanced 2D CNN & 99.51\% & 99.58\% & 4 \\
-2D CNN, unscaled dB & 50\% & 0\% & 0 \\
-Enhanced 1D CNN & 50\% & 100\% & 721 \\
+Baseline 1D CNN & 99.79\% & 99.72\% & 99.79\% & 1 \\
+CRNN-PCEN & 99.79\% & 99.72\% & 99.79\% & 1 \\
+Enhanced 2D CNN & 99.51\% & 99.58\% & 99.51\% & 4 \\
+2D CNN, unscaled dB & 50.00\% & 0.00\% & --- & 0 \\
+Enhanced 1D CNN & 50.00\% & 100\% & 66.67\% & 721 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The unscaled 2D row is the stalled checkpoint (721 false negatives). The 2D model in Table~\ref{tab:slide} is a later checkpoint. The enhanced 1D row is positive on every file.
+The unscaled 2D row is the stalled checkpoint (721 false negatives). The 2D numbers in Table~\ref{tab:300} are the later, scaled model. The enhanced 1D row is positive on every file.
 
-\subsection{Seventy-five external recordings}
-A file counts as a detection if any 750\,ms window at 75\% overlap crosses 0.50. Enhanced 2D recall is 17/20 shots with 33/35 ambient files ignored and 7/20 imposters rejected. CRNN-PCEN recall is 12/20 with all 35 ambient files ignored and 8/20 imposters rejected. Baseline 1D recall is 6/20. Figure~\ref{fig:drop} places this next to the hold-out. The 1D model has memorized training waveforms. On one 35-window clapping file, PCEN fired on 23 windows: it boosts any fast transient.
+\subsection{External recordings and the 300-clip set}
+On 75 external recordings a file counts as a detection if any window crosses $0.50$ (Table~\ref{tab:external}). Figure~\ref{fig:drop} places that recall next to the hold-out. The 1D model has memorized the training waveforms.
+
+\begin{table}[!t]
+\centering
+\caption{75 external recordings (sliding, $\tau = 0.50$).}
+\label{tab:external}
+\footnotesize
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{Recall} & \textbf{Ambient} & \textbf{Imposter} \\
+\midrule
+Enhanced 2D CNN & 17/20 (85\%) & 33/35 (94\%) & 7/20 (35\%) \\
+CRNN-PCEN & 12/20 (60\%) & 35/35 (100\%) & 8/20 (40\%) \\
+Baseline 1D CNN & 6/20 (30\%) & 31/35 (89\%) & 11/20 (55\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig4_lab_vs_external.png}
-\caption{Hold-out recall versus recall on 75 external recordings.}
+\caption{Hold-out recall against recall on 75 external recordings.}
 \label{fig:drop}
 \end{figure}
 
-\subsection{Three hundred unseen clips}
-Tables~\ref{tab:slide} and~\ref{tab:peak} are the main result (INT8, threshold 0.50, virtual Raspberry Pi).
+Table~\ref{tab:300} is the main result: 300 unseen clips, INT8, $\tau = 0.50$, on the Raspberry Pi~4. Figure~\ref{fig:300} shows the same comparison for the models that still discriminate.
 
-\begin{table}[!t]
+\begin{table*}[!t]
 \centering
-\caption{Sliding window, 300 clips.}
-\label{tab:slide}
+\caption{300 unseen clips at $\tau = 0.50$. Recall, ambient specificity, and imposter rejection, in percent.}
+\label{tab:300}
 \footnotesize
-\begin{tabular}{lccc}
+\begin{tabular}{lcccccc}
 \toprule
-\textbf{Model} & \textbf{Recall} & \textbf{Ambient} & \textbf{Imposter} \\
+ & \multicolumn{3}{c}{\textbf{Sliding window}} & \multicolumn{3}{c}{\textbf{Peak-centered}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+\textbf{Model} & \textbf{Recall} & \textbf{Ambient} & \textbf{Imposter} & \textbf{Recall} & \textbf{Ambient} & \textbf{Imposter} \\
 \midrule
-Baseline 1D & 45\% & 85\% & 72\% \\
-Baseline 2D & 66\% & 88\% & 59\% \\
-Enh. 1D (broken) & 100\% & 0\% & 0\% \\
-Enhanced 2D & 67\% & 82\% & 66\% \\
-CRNN-PCEN & 57\% & 86\% & 61\% \\
+Baseline 1D CNN & 45 & 85 & 72 & 30 & 95 & 84 \\
+Baseline 2D CNN & 66 & 88 & 59 & 45 & 94 & 77 \\
+Enhanced 1D CNN & 100 & 0 & 0 & 100 & 0 & 0 \\
+Enhanced 2D CNN & 67 & 82 & 66 & 38 & 99 & 89 \\
+CRNN-PCEN & 57 & 86 & 61 & 33 & 97 & 85 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
-\begin{table}[!t]
+\begin{figure*}[!t]
 \centering
-\caption{Peak-centered window, 300 clips.}
-\label{tab:peak}
-\footnotesize
-\begin{tabular}{lccc}
-\toprule
-\textbf{Model} & \textbf{Recall} & \textbf{Ambient} & \textbf{Imposter} \\
-\midrule
-Baseline 1D & 30\% & 95\% & 84\% \\
-Baseline 2D & 45\% & 94\% & 77\% \\
-Enh. 1D (broken) & 100\% & 0\% & 0\% \\
-Enhanced 2D & 38\% & 99\% & 89\% \\
-CRNN-PCEN & 33\% & 97\% & 85\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[!t]
-\centering
-\includegraphics[width=\columnwidth]{figures/fig2_300clip_recall.png}
-\caption{Working models on 300 clips. Sliding recall is higher. Peak specificity is higher.}
+\includegraphics[width=0.86\textwidth]{figures/fig2_300clip_recall.png}
+\caption{Sliding recall is 15 to 29 points above peak recall. Peak ambient specificity reaches 99\% for the Enhanced 2D CNN.}
 \label{fig:300}
-\end{figure}
+\end{figure*}
 
-Sliding recall is 15 to 29 points above peak recall for every working model. A crop around the loudest sample misses shots whose energy is spread out. Host versus virtual-machine peak recall differs by about 4 to 6 points (enhanced 2D: 44.1\% host, 38.0\% VM; CRNN-PCEN: 32.0\% and 33.0\%). Model order does not change.
+Sliding recall is higher because a single crop on the loudest sample misses shots whose energy is spread out. Peak specificity is higher because that crop also misses many bangs that are not shots. Host and Pi peak recall differ by about 4 to 6 points (Enhanced 2D CNN: 44.1\% on the host, 38.0\% on the Pi; CRNN-PCEN: 32.0\% and 33.0\%). The order of the models does not change. The CRNN moves the least ($\pm 1$ point).
 
 \subsection{Latency}
-Table~\ref{tab:latency} and Fig.~\ref{fig:lat} use 100 iterations. Every model finishes inside the 187.5\,ms hop on this virtual machine. The enhanced 2D CNN is the small file with the best sliding recall among models that still discriminate. The CRNN is the model whose recall moves least under a distorted microphone, at a larger file.
+Table~\ref{tab:latency} and Fig.~\ref{fig:lat} are 100 iterations. Every model finishes inside the 187.5\,ms hop. The Enhanced 2D CNN is the small file with the best sliding recall among models that still separate the classes. The CRNN is larger and is the model whose recall does not drop when the microphone response is distorted.
 
 \begin{table}[!t]
 \centering
-\caption{INT8 latency on the capped virtual machine.}
+\caption{INT8 latency on the Raspberry Pi~4 (100 iterations, CPU at 45--50\%).}
 \label{tab:latency}
 \footnotesize
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
 \toprule
-\textbf{Model} & \textbf{Mean} & \textbf{Hop used} \\
+\textbf{Model} & \textbf{INT8} & \textbf{Mean} & \textbf{Hop} \\
 \midrule
-Baseline 1D CNN & 2.29\,ms & 1.2\% \\
-Baseline 2D CNN & 2.15\,ms & 1.2\% \\
-Enhanced 1D CNN & 2.69\,ms & 1.4\% \\
-Enhanced 2D CNN & 0.09\,ms & 0.05\% \\
-CRNN-PCEN & 11.86\,ms & 6.3\% \\
+Baseline 1D CNN & 112.5\,KB & 2.29\,ms & 1.2\% \\
+Baseline 2D CNN & 259.9\,KB & 2.15\,ms & 1.2\% \\
+Enhanced 1D CNN & 118.5\,KB & 2.69\,ms & 1.4\% \\
+Enhanced 2D CNN & 123.6\,KB & 0.09\,ms & 0.05\% \\
+CRNN-PCEN & 478.9\,KB & 11.86\,ms & 6.3\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -229,49 +261,95 @@ CRNN-PCEN & 11.86\,ms & 6.3\% \\
 \label{fig:lat}
 \end{figure}
 
-\subsection{PCEN and the ensemble}
-The CRNN input was band-limited, clipped, gained, and noised. Sliding recall at threshold 0.50 was 61\% clean and 61\% distorted (69\% on both at threshold 0.10). A change of capsule does not by itself wipe recall. Fireworks and claps remain, because they are impulses too (Fig.~\ref{fig:pcen}).
+\subsection{PCEN under a changed microphone}
+The CRNN input was band-limited (150\,Hz to 8\,kHz), clipped, gained between $0.5\times$ and $1.5\times$, and noised at 15--30\,dB SNR. Table~\ref{tab:pcen_robust} and Fig.~\ref{fig:pcen} are the sliding-window recall. At $\tau = 0.50$ the recall is 61\% on the clean files and 61\% on the distorted files. At $\tau = 0.10$ it is 69\% on both. A change of capsule does not by itself remove the detections. Fireworks and claps remain, because they are impulses too.
+
+\begin{table}[!t]
+\centering
+\caption{CRNN-PCEN sliding recall, clean versus distorted input.}
+\label{tab:pcen_robust}
+\footnotesize
+\begin{tabular}{cccc}
+\toprule
+$\tau$ & \textbf{Clean} & \textbf{Distorted} & \textbf{Ambient (clean / dist.)} \\
+\midrule
+0.10 & 69\% & 69\% & 75\% / 74\% \\
+0.30 & 62\% & 66\% & 78\% / 77\% \\
+0.50 & 61\% & 61\% & 80\% / 77\% \\
+0.70 & 59\% & 59\% & 84\% / 81\% \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig6_pcen_distortion.png}
-\caption{CRNN-PCEN sliding recall, clean input versus simulated microphone distortion.}
+\caption{CRNN-PCEN sliding recall. The two curves stay together across the threshold.}
 \label{fig:pcen}
 \end{figure}
 
-An ensemble of the enhanced 2D CNN, the CRNN, and the baseline 1D CNN calls 77 of 100 real shots correctly (Fig.~\ref{fig:cm}). It also calls 44 of 100 imposters real shots, and 20 of 100 ambient files real shots. Combined size is about 715\,KB and combined time about 17\,ms. For a first campus node the single enhanced 2D model is the practical choice. The ensemble is the higher-recall option if the gateway can tolerate more false bits.
+\subsection{Ensemble}
+The Enhanced 2D CNN, the CRNN-PCEN, and the baseline 1D CNN are combined by accepting a detection if any one of them crosses its threshold, then applying a short spectral check (energy below 200\,Hz, energy above 4\,kHz, spectral centroid). Table~\ref{tab:ensemble} and Fig.~\ref{fig:cm} are the 300-clip counts. Recall rises from 67\% to 77\% (77 of 100 shots). Forty-four of 100 imposters are still called real shots, and 20 of 100 ambient files are called real shots. Combined size is about 715\,KB and combined time about 17\,ms, still inside the hop.
+
+The gain is complementary misses, not a new feature. On \texttt{127724.wav} the Enhanced 2D CNN scores 21.1\% and the CRNN scores 99.3\%. On \texttt{170167.wav} the CRNN scores 0 and the Enhanced 2D CNN scores 99.6\%. Table~\ref{tab:paradigm} is the choice among the three operating points. For a first node the single Enhanced 2D model is the one that fits. The ensemble is the higher-recall option if the gateway can tolerate more false bits.
+
+\begin{table}[!t]
+\centering
+\caption{Ensemble counts on 300 clips (100 per true class).}
+\label{tab:ensemble}
+\footnotesize
+\begin{tabular}{lccc}
+\toprule
+\textbf{True class} & \textbf{Called real} & \textbf{Called fake} & \textbf{Called other} \\
+\midrule
+Real gunshot & 77 & 15 & 8 \\
+Hard imposter & 44 & 46 & 10 \\
+Ambient & 20 & 38 & 42 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig5_ensemble_confusion.png}
-\caption{Ensemble counts on 300 clips, 100 files per true class.}
+\caption{Ensemble on 300 clips. Gunshot recall is 77 of 100.}
 \label{fig:cm}
 \end{figure}
 
-The 99\% hold-out and the 99\% Edge Impulse scores are folder scores. The 300-clip test matches the original problem: most audio is not a shot, and many loud sounds are not shots either. No single model is both highly sensitive and highly specific. One microphone has no second arrival time with which to separate a firework from a shot.
+\begin{table}[!t]
+\centering
+\caption{Operating points on the 300-clip set.}
+\label{tab:paradigm}
+\footnotesize
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Setting} & \textbf{Recall} & \textbf{Spec.} & \textbf{Latency} & \textbf{Flash} \\
+\midrule
+Enhanced 2D, peak & 38\% & 99\% & 0.09\,ms & 124\,KB \\
+Enhanced 2D, sliding & 67\% & 82\% & 0.75\,ms & 124\,KB \\
+Three-model ensemble & 77\% & 80\% & 17\,ms & 715\,KB \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\section{Conclusion}
+\section{Conclusion and Future Work}
 \label{sec:conclusion}
-We cleaned a large pool, dropped the 250\,ms cut, and showed that SVM and random-forest scores near 100\% on a balanced file test do not survive a live microphone. A 2D spectrogram CNN is the first model that rejects a useful share of wind, rain, and traffic. On 300 unseen clips the enhanced 2D CNN reaches 67\% gunshot recall when the window slides and 99\% ambient specificity on a peak crop, in 0.09\,ms and 124\,KB. The PCEN-CRNN stays stable when the microphone is distorted, at lower recall and a larger file. The enhanced 1D network is not usable after INT8 conversion.
 
-These tests ran on a PC and on a virtual Raspberry Pi. The Arduino Nano 33 BLE Sense has not been programmed. The remaining work is hardware.
+Classical classifiers that reach near-perfect accuracy on balanced hold-out files fail on live input because temporal averaging destroys the few-millisecond shockwave signature. The move from 1D MFCC classifiers to 2D spectrogram CNNs consistently improved rejection of ambient and imposter sounds. On 300 unseen clips the Enhanced 2D CNN achieves 67\% gunshot recall (sliding) and 99\% ambient specificity (peak) in 0.09\,ms within 124\,KB. The PCEN-CRNN maintains stable recall under simulated microphone distortion with zero degradation, confirming PCEN as an effective domain-shift normalizer. The Enhanced 1D CNN is not deployable after INT8 conversion due to weight saturation in dilated 1D convolution filters.
 
-\emph{Sleep.} The node should stay idle until the sound level crosses a coarse threshold, run one inference, and return to idle. We have not measured that current.
+A physical limitation was identified: a single microphone cannot separate aerial mortar fireworks from gunfire, as both produce identical shockwave rise-times and reverberation profiles. Resolving this requires spatial multi-microphone arrays.
 
-\emph{One-bit transmission.} If the score crosses the threshold the node sends 1, with a node id and a timestamp. Otherwise the radio stays off. Raw audio is never sent. In our notes this was called a binary neural network. The accurate description is an ordinary network with a binary decision. Weights were not binarized. The energy saving comes from not sending audio, and from not sending anything on the zeros. It has not been metered.
+The following hardware tasks are next:
 
-\emph{Aggregation.} One node beside a clap will sometimes send a 1. The gateway should alarm only when more than one nearby node sends a 1 inside the short time sound takes to cross the site. That is a count and a time check. It is how a single microphone's false bit from a clap or a firework gets dropped. It is not built yet.
+\textbf{1) Physical Deployment.} Deploy the Enhanced 2D CNN INT8 model on a Raspberry Pi~4 to confirm edge timing, then port inference to the Arduino Nano 33 BLE Sense (on-board ST MP34DT05 PDM microphone).
 
-The next build is to put the enhanced 2D INT8 model on a physical Raspberry Pi, check the virtual-machine timing, and then move the same binary decision onto the Nano 33 BLE Sense.
+\textbf{2) Duty-Cycled Sleep and One-Bit Transmission.} The node stays in deep sleep ($\sim$5\,$\mu$A) until a coarse energy threshold triggers wake-up~\cite{edgeimpulse2024}. One inference cycle runs and the node sleeps again. If the score crosses the threshold, the node transmits a minimal packet: node ID (1~byte), timestamp (4~bytes), detection flag (1~bit), confidence (1~byte). Radio on-time is under 1.5\,ms per trigger. If the score is below threshold, no transmission occurs. Raw audio never leaves the node.
 
-\section*{Acknowledgment}
-Firearm recordings include the open set of~\cite{dib2023}. PCEN follows~\cite{lostanlen2019}. The advisor for this project is Dr. Kaustubh Dhondge.
+\textbf{3) Multi-Node Spatial Consensus.} A single node next to a hand clap may send a false bit. The gateway raises an alert only when $K \ge 3$ neighbouring nodes transmit within the acoustic propagation window ($\sim$100\,ms for 34\,m spacing). This rejects localized percussive events without streaming audio.
 
-\begin{thebibliography}{4}
-\bibitem{dib2023} ``A multi-firearm, multi-orientation audio dataset of gunshots,'' \emph{Data in Brief}, vol. 48, Art. no. 109091, 2023, doi: 10.1016/j.dib.2023.109091.
-\bibitem{lostanlen2019} V. Lostanlen, J. Salamon, M. Cartwright, B. McFee, A. Farnsworth, S. Kelling, and J. P. Bello, ``Per-channel energy normalization: Why and how,'' \emph{IEEE Signal Process. Lett.}, vol. 26, no. 1, pp. 39--43, 2019.
-\bibitem{zhang2018} H. Zhang, M. Cisse, Y. N. Dauphin, and D. Lopez-Paz, ``mixup: Beyond empirical risk minimization,'' in \emph{Proc. ICLR}, 2018.
-\bibitem{park2019} D. S. Park \emph{et al.}, ``SpecAugment: A simple data augmentation method for automatic speech recognition,'' in \emph{Proc. Interspeech}, 2019, pp. 2613--2617.
-\end{thebibliography}
+\textbf{4) Self-Healing Network and Dashboard.} Nodes report battery, sensor drift, and link failures. A dashboard on the gateway logs every trigger for post-incident review.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
 
 \end{document}

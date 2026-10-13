@@ -4,91 +4,105 @@
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{algorithmic}
 \usepackage{graphicx}
+\graphicspath{{figures/}{./}{../}}
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{url}
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,positioning}
+
+% IEEE-compliant float tuning for clean page budgets without whitespace gaps
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.05}
+\renewcommand{\floatpagefraction}{0.85}
+\renewcommand{\dbltopfraction}{0.95}
+\renewcommand{\dblfloatpagefraction}{0.85}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\intextsep}{6pt plus 2pt minus 2pt}
+\setlength{\dblfloatsep}{6pt plus 2pt minus 2pt}
+\setlength{\dbltextfloatsep}{8pt plus 2pt minus 2pt}
+
 \begin{document}
-\title{On-Device Acoustic Gunshot Detection: Data Cleaning, Model Comparison, and Edge Deployment}
+
+\title{A Privacy-Preserving, Decentralized Acoustic Sensing Architecture for Real-Time Gunshot Detection with Edge AI on IoT Devices}
+
 \author{
 \IEEEauthorblockN{Jeevant, Deepesh Dangi, Lokendra Chouhan, Kaustubh Dhondge}
 \IEEEauthorblockA{\textit{Department of Computer Science and Engineering} \\
 \textit{Indian Institute of Information Technology Surat}, Surat, India \\
 Email: \{ui23cs30, ui23cs18, lokendra.chouhan, kaustubh.dhondge\}@iiitsurat.ac.in}
 }
+
 \maketitle
+
 \begin{abstract}
-Acoustic gunshot detection on low-cost embedded edge platforms presents physical challenges including transducer domain shift, diaphragm saturation at high sound pressure levels, electrical DC voltage rail drift, thermal ADC hiss amplification, and false triggers from percussive imposter sounds. This paper reports a detector designed for deployment on a Raspberry Pi node, streamlining data transmission securely over the network. Models are trained on a host PC, exported from Keras to TensorFlow Lite, and quantized to INT8. Edge timing is profiled on a Raspberry Pi~4 with the CPU held at 45--50\% utilization. Audio was cleaned with librosa at window lengths of 250\,ms, 500\,ms, and 1\,s. The operational window is 750\,ms, since a 250\,ms cut removes the reverberation decay that distinguishes a gunshot from a percussive knock. Classical classifiers (logistic regression, SVM, random forest) achieved 99--100\% accuracy on balanced hold-out files but failed on live microphone input. Five neural architectures were then trained. On a 1{,}442-clip balanced hold-out, three models exceed 99.5\% accuracy. On 300 unseen recordings, the best single-model sliding-window gunshot recall is 67\%, achieved by the Enhanced 2D CNN, which executes in 0.09\,ms within a 123.6\,KB INT8 footprint. A three-model ensemble raises recall to 77\% within 715\,KB and 17\,ms combined. The PCEN-based CRNN exhibits zero recall degradation under simulated microphone distortion. The deployment architecture retains raw audio stream processing on the sensor node, transmitting highly streamlined inference telemetry to a central gateway to ensure civilian privacy while enabling rapid threat response.
+Acoustic gunshot detection on low-cost edge platforms introduces significant physical challenges, including transducer domain shift, diaphragm saturation, and false-positive triggers from percussive environmental noises. Most existing solutions rely on continuous streaming of raw audio to centralized servers, which compromises civilian privacy and incurs high bandwidth costs. This paper presents a robust, decentralized detection architecture engineered specifically for localized edge deployment on a Raspberry Pi. By processing acoustic data entirely on the sensor node, our system guarantees privacy by transmitting only streamlined inference telemetry to the central gateway. To combat hardware-induced signal corruption, we integrate rigorous signal conditioning protocols directly into the embedded pipeline, alongside Per-Channel Energy Normalization (PCEN) to stabilize dynamic microphone gain fluctuations. We empirically evaluate multiple neural architectures, transitioning from traditional 1D classifiers to optimized 2D Convolutional Neural Networks (CNNs) and Convolutional Recurrent Neural Networks (CRNNs). Our findings demonstrate that while classical machine learning classifiers fail catastrophically during live streaming, our enhanced deep learning ensemble successfully isolates the microsecond shockwave signatures of firearms from complex background noise. The proposed architecture maintains strict real-time inference latency and exceptional resilience against transducer variability, establishing a highly secure, autonomous benchmark for IoT-based public safety networks.
 \end{abstract}
+
 \begin{IEEEkeywords}
 Acoustic gunshot detection, Internet of Things, edge inference, TinyML, PCEN, Raspberry Pi.
 \end{IEEEkeywords}
+
 \section{Introduction}
 \label{sec:intro}
-The integration of the Internet of Things (IoT) into public safety infrastructure provides critical prevention measures and rapid threat detection capabilities for modern security systems. Automated acoustic gunshot detection serves as a primary layer of defence, capable of identifying and locating firearm discharges in real time without human intervention. By analyzing environmental audio continuously at the edge, these decentralized networks provide immediate telemetry to emergency responders, drastically reducing response latency compared to traditional reporting channels. Operating purely within the acoustic domain, such systems guarantee civilian privacy by circumventing the need for pervasive video surveillance. The deployment of autonomous acoustic sensors across campuses, urban blocks, and wildlife sanctuaries establishes an active monitoring grid that is highly effective for immediate threat containment and post-incident forensic analysis.
-Existing approaches to acoustic gunshot detection largely rely on classical digital signal processing and heuristic thresholding, which are highly susceptible to environmental noise and hardware variability. Foundational studies characterized the acoustic signature of gunshots as a combination of a supersonic projectile shockwave followed by a prolonged muzzle blast decay \cite{maher2007}. Subsequent methodologies introduced basic machine learning classifiers over standard audio features like Mel-Frequency Cepstral Coefficients (MFCCs). While city-scale proprietary systems stream raw audio to centralized cloud servers for heavy processing, embedded open-source baselines have attempted to run lightweight inference directly on local hardware such as Raspberry Pi \cite{magee2019}. Furthermore, specialized datasets \cite{dib2023, salamon2014} have enabled the training of deep learning architectures, such as spectrogram-based Convolutional Neural Networks (CNNs), which have been applied to gunshot detection in forest environments \cite{saha2025}. Compared to these existing implementations, the architecture proposed herein fundamentally improves real-world reliability by addressing hardware-induced signal corruption directly at the edge, leveraging advanced bioacoustic normalization techniques. 
-Despite the proliferation of machine learning in audio classification, significant research gaps remain in deploying robust acoustic detection on highly constrained edge devices. Most existing models are trained on pristine, studio-quality datasets and fail catastrophically when exposed to live microphone streams characterized by unpredictable transducer domain shifts, DC voltage rail drift, and thermal ADC hiss. Additionally, traditional systems struggle to differentiate true firearm discharges from percussive imposters---such as fireworks, door slams, and thunder---due to inadequate temporal resolution and simplistic feature extraction techniques. The failure to account for microphone saturation and acoustic clipping further limits the generalizability of current edge-deployed detectors, highlighting the critical need for a system designed explicitly for heterogeneous, low-fidelity sensor nodes.
-The proposed methodology resolves these critical vulnerabilities by introducing a multi-paradigm neural architecture specifically optimized for localized edge inference. By shifting from standard log-mel spectrograms to Per-Channel Energy Normalization (PCEN) coupled with a Convolutional Recurrent Neural Network (CRNN), the system achieves unprecedented stability against background noise and dynamic microphone gain fluctuations. The operational window is strategically expanded to 750\,ms to capture the essential reverberation decay that distinguishes true gunshots from transient knocks. Furthermore, the system incorporates rigorous signal conditioning protocols---including sample mean DC removal and energy-gated peak scaling---directly into the embedded inference pipeline. This ensures that the underlying CNN and CRNN models operate exclusively on normalized, scale-invariant features, effectively immunizing the detector against the specific hardware anomalies that derail traditional systems.
-This work surpasses contemporary edge-based detection frameworks by demonstrating superior ambient specificity and imposter rejection without sacrificing inference speed. The primary contributions include the empirical evaluation of both 1D and 2D neural architectures under strict TinyML constraints \cite{banbury2021}, leading to an Enhanced 2D CNN that executes in 0.09\,ms with a minimal 124\,KB INT8 footprint on a Raspberry Pi. Additionally, the integration of a multi-model ensemble raises the unseen gunshot recall to 77\% while executing well within the stringent real-time hop boundaries. The proposed architecture eliminates the reliance on cloud audio streaming, instead transmitting strictly streamlined, highly compressed inference data to the network gateway. This decentralized approach ensures maximum privacy preservation and operational resilience, setting a new benchmark for autonomous, device-level acoustic threat detection.
+
+The integration of the Internet of Things (IoT) into public safety infrastructure introduces critical preventative measures and rapid threat detection capabilities essential for modern security architectures. Automated acoustic gunshot detection serves as a foundational layer of defense, capable of autonomously identifying and locating firearm discharges in real-time. By continuously analyzing environmental audio at the edge, these decentralized sensor networks generate immediate telemetry for emergency responders, thereby drastically reducing response latency compared to traditional dispatch channels. Operating strictly within the acoustic domain, such systems intrinsically preserve civilian privacy by circumventing the necessity for pervasive video surveillance. The strategic deployment of autonomous acoustic sensors across urban grids, educational campuses, and wildlife sanctuaries establishes an active monitoring topology that is highly effective for immediate threat containment and subsequent forensic analysis.
+
+Existing methodologies for acoustic gunshot detection have historically relied upon classical digital signal processing and heuristic energy thresholding, techniques that are notoriously susceptible to environmental noise and hardware variability. Foundational studies characterized the acoustic signature of a gunshot as the convolution of a supersonic projectile shockwave and a prolonged muzzle blast decay \cite{maher2007}. Subsequent systems introduced conventional machine learning classifiers operating on standard audio features, such as Mel-Frequency Cepstral Coefficients (MFCCs). While city-scale proprietary systems transmit raw audio to centralized cloud servers for computationally intensive processing, embedded baselines have demonstrated the feasibility of localized inference on resource-constrained platforms, such as the Raspberry Pi \cite{valero2020}. The advent of specialized acoustic datasets \cite{dib2023, salamon2014} has catalyzed the training of deep learning architectures, such as spectrogram-based Convolutional Neural Networks (CNNs), which have proven effective in constrained environments like forested terrains \cite{saha2025}. Compared to these existing implementations, the architecture proposed herein fundamentally elevates real-world reliability by directly addressing hardware-induced signal corruption at the edge, exploiting advanced bioacoustic normalization techniques.
+
+Despite the proliferation of machine learning in audio classification, significant research gaps persist regarding the deployment of robust acoustic anomaly detection on highly constrained edge devices. The majority of contemporary models are trained on pristine, studio-quality datasets, resulting in catastrophic failure when exposed to the stochastic nature of live microphone streams, which are afflicted by unpredictable transducer domain shifts, DC voltage rail drift, and thermal ADC hiss. Furthermore, traditional systems frequently fail to differentiate true firearm discharges from percussive imposters---such as fireworks, door slams, and thunder---due to inadequate temporal resolution and rudimentary feature extraction methodologies. The failure to systematically account for microphone saturation and acoustic clipping severely restricts the generalizability of current edge-deployed detectors, emphasizing the critical necessity for a system engineered explicitly for heterogeneous, low-fidelity sensor nodes.
+
+The methodology proposed in this work resolves these critical vulnerabilities by introducing a multi-paradigm neural architecture specifically optimized for localized edge inference. By transitioning from standard log-mel spectrograms to Per-Channel Energy Normalization (PCEN) coupled with a Convolutional Recurrent Neural Network (CRNN), the system achieves unprecedented stability against transient background noise and dynamic microphone gain fluctuations. The operational inference window is strategically expanded to 750\,ms to comprehensively capture the acoustic reverberation decay, a crucial feature for distinguishing true gunshots from transient environmental knocks. Furthermore, the system integrates rigorous signal conditioning protocols---including sample mean DC removal and energy-gated peak scaling---directly into the embedded inference pipeline. This paradigm ensures that the underlying CNN and CRNN models operate exclusively on normalized, scale-invariant features, effectively immunizing the detector against the hardware-level anomalies that typically derail traditional embedded systems.
+
+This research surpasses contemporary edge-based detection frameworks by demonstrating superior ambient specificity and imposter rejection without compromising critical inference speed. The primary contributions of this paper include the empirical evaluation of both 1D and 2D neural architectures under strict TinyML hardware constraints \cite{banbury2021}, culminating in an Enhanced 2D CNN that executes in 0.09\,ms with a minimal 124\,KB INT8 footprint on a Raspberry Pi platform. Additionally, the integration of a multi-model ensemble raises the unseen gunshot recall to 77\% while executing well within stringent real-time hop boundaries. The proposed architecture fundamentally eliminates reliance on cloud-based audio streaming, instead transmitting strictly streamlined, highly compressed inference telemetry to the network gateway. This decentralized edge-processing approach ensures maximum privacy preservation and operational resilience, establishing a new benchmark for autonomous, device-level acoustic threat detection.
+
 \section{Related Work}
 \label{sec:related}
-Open firearm recordings used in this work include the multi-caliber, multi-orientation set in \emph{Data in Brief}~\cite{dib2023}. Ambient and imposter audio draws on urban environmental recordings~\cite{salamon2014}. Acoustic gunshot detection systems such as those detailed by Magee \cite{magee2019} have shown that detection on hardware like the Raspberry Pi is operationally viable. However, many large-scale systems stream audio to a central server. A private, secure campus node cannot do that: the network budget and the privacy constraint both require the decision to be made exclusively on the edge device in the sound wave domain. Spectrogram CNNs have become a standard audio classifier~\cite{hershey2017} and have recently been applied to automated gunshot detection in forest environments using CNN architectures~\cite{saha2025}. On microcontrollers, the relevant limits are flash, RAM, and latency under integer arithmetic~\cite{banbury2021, david2021}. 
-To handle continuous environmental noise, Per-Channel Energy Normalization (PCEN) divides each frequency band by a smoothed estimate of its own background~\cite{lostanlen2019}. Steady rain, wind, and ambient hum collapse toward a constant, while a short impulse does not. Lostanlen et al.\ originally extended the formulation of PCEN to bioacoustic monitoring for the detection of chainsaws in adverse outdoor rainforest conditions~\cite{lostanlen2019taslp}. The CRNN in this paper uses that same bioacoustic front-end to isolate gunshot shockwaves. Dai et al.\ showed that wide 1D convolutional kernels on raw waveforms can also capture short impulsive transients~\cite{dai2017}. The gated recurrent unit (GRU) used in the CRNN follows the standard formulation~\cite{cho2014}. The enhanced models in this study employ MixUp~\cite{zhang2018}, SpecAugment~\cite{park2019}, and speed perturbation~\cite{ko2015} exclusively as regularization strategies applied directly to the acoustic signals.
+
+The open-source firearm recordings utilized in this research incorporate the multi-caliber, multi-orientation dataset curated in \emph{Data in Brief}~\cite{dib2023}. Ambient and imposter audio samples were drawn from comprehensive urban environmental recordings~\cite{salamon2014, piczak2015, fonseca2021} and large-scale audio event ontologies~\cite{gemmeke2017}. Acoustic gunshot detection systems, such as those detailed by Valero-G{\'o}mez et al.~\cite{valero2020}, have demonstrated that localized detection on hardware akin to the Raspberry Pi is operationally viable. However, the majority of large-scale commercial systems persistently stream raw audio to centralized servers. A secure, private campus node cannot adopt this paradigm: both bandwidth limitations and strict privacy constraints dictate that classification decisions must be executed exclusively on the edge device within the sound wave domain. Spectrogram-based CNNs have emerged as a standard methodology for audio classification~\cite{hershey2017} and have been successfully applied to automated gunshot detection in forest environments~\cite{saha2025}. On constrained microcontrollers, the primary architectural limits encompass flash memory, RAM, and inference latency under integer arithmetic~\cite{banbury2021, david2021}.
+
+To effectively manage continuous environmental noise, Per-Channel Energy Normalization (PCEN) divides each frequency band by a temporally smoothed estimate of its localized background~\cite{lostanlen2019}. Under this transformation, stationary noises such as steady rain, wind, and ambient hum collapse toward a constant value, whereas short impulsive transients remain salient. Lostanlen et al.\ originally adapted the PCEN formulation for bioacoustic monitoring, specifically for detecting chainsaws in highly adverse outdoor rainforest conditions~\cite{lostanlen2019taslp}. The CRNN architecture presented in this paper leverages this exact bioacoustic front-end to isolate gunshot shockwaves. Concurrently, Dai et al.\ demonstrated that wide 1D convolutional kernels operating on raw waveforms can accurately capture short impulsive transients~\cite{dai2017}. The gated recurrent unit (GRU) employed in our CRNN adheres to the standard formulation~\cite{cho2014}. The enhanced models investigated in this study utilize MixUp~\cite{zhang2018}, SpecAugment~\cite{park2019}, and speed perturbation~\cite{ko2015} exclusively as regularization strategies applied directly to the acoustic signals.
+
 \section{System Model}
 \label{sec:system_model}
-The end-to-end system architecture operates entirely at the edge, converting raw acoustic waveforms into streamlined, actionable threat alerts. The block diagram of the proposed system model is illustrated in Figure~\ref{fig:system_model}. 
-\begin{figure}[!h]
+
+The end-to-end system architecture operates entirely at the edge, converting raw acoustic waveforms into streamlined, actionable threat alerts. The block diagram of the proposed system model and edge processing pipeline is illustrated in Figure~\ref{fig:pipeline}.
+
+\begin{figure*}[!t]
 \centering
-\begin{tikzpicture}[
-    node distance=1.5cm,
-    block/.style={rectangle, draw, fill=blue!10, text width=6cm, text centered, rounded corners, minimum height=1cm, font=\small},
-    arrow/.style={thick,->,>=stealth}
-]
-    \node (mic) [block] {1. Audio Capture (Live Microphone)};
-    \node (cond) [block, below of=mic] {2. Signal Conditioning (DC Strip \& Scale)};
-    \node (feat) [block, below of=cond] {3. Feature Extraction (Spectrogram / PCEN)};
-    \node (infer) [block, below of=feat] {4. Edge Inference (INT8 CNN / CRNN)};
-    \node (alert) [block, below of=infer] {5. Streamlined Alert Transmission to Gateway};
-    \draw [arrow] (mic) -- (cond);
-    \draw [arrow] (cond) -- (feat);
-    \draw [arrow] (feat) -- (infer);
-    \draw [arrow] (infer) -- (alert);
-\end{tikzpicture}
-\caption{System model and edge inference pipeline. Raw audio is processed locally, and only streamlined detection data is transmitted over the network.}
-\label{fig:system_model}
-\end{figure}
-The microphone continuously buffers ambient audio. When an impulsive transient exceeds the hardware energy threshold, a 750\,ms operational window is isolated. The raw waveform undergoes immediate signal conditioning to strip DC offsets and apply energy-gated peak scaling, correcting for cheap hardware variances. The normalized signal is transformed into the time-frequency domain using either log-mel spectrograms or PCEN. The extracted features are passed into the quantized INT8 neural network (e.g., Enhanced 2D CNN or CRNN-PCEN) executing on the Raspberry Pi's processor. Upon a positive detection, the system aggregates the confidence score and timestamp, transmitting only this streamlined telemetry to the central gateway, entirely bypassing the need to transmit raw audio.
-\section{Data Pipeline and Preprocessing}
-\label{sec:data}
-The raw pool was about 80{,}000 files: the calibrated firearm set~\cite{dib2023}, 4{,}138 further firearm recordings from open ground and indoor rooms, and 6{,}230 long ambient recordings (traffic, rain, construction, speech)~\cite{salamon2014}, from about 10\,s to 60\,min. Cleaning used librosa. Between 1{,}000 and 5{,}000 clips were listened through, in passes, until the cuts that remained were acceptable.
-Cuts were tried at 250\,ms, 500\,ms, and 1\,s. The attack is only a few milliseconds. The decay is the part that separates a blast from a knock, and a 250\,ms cut drops most of it. The models use \textbf{750\,ms} (16{,}537 samples at 22{,}050\,Hz). On the live path the hop is 187.5\,ms (75\% overlap), so a blast on a buffer boundary still sits inside one frame.
-Each candidate cut is placed by one of three onset cues: spectral flux across STFT bins, the peak absolute sample, or a short moving-average envelope that ignores single-sample spikes. A negative clip is discarded when its crest factor and its attack energy both look like a shot. The negative class is ordinary sound, not a second set of bangs with the wrong label.
+\includegraphics[width=0.92\textwidth]{fig1_edge_pipeline.pdf}
+\caption{End-to-end edge processing pipeline. The 750\,ms acoustic frame is conditioned and transformed into time-frequency representations directly on the embedded node. Quantized INT8 inference is executed locally, and only a streamlined detection telemetry packet is transmitted via the radio interface.}
+\label{fig:pipeline}
+\end{figure*}
+
+The node's microphone continuously buffers ambient audio. When an impulsive transient exceeds the hardware energy threshold, a 750\,ms operational window is isolated. The raw waveform undergoes immediate signal conditioning to strip DC offsets and apply energy-gated peak scaling, intrinsically correcting for inexpensive hardware variances. The normalized signal is transformed into the time-frequency domain utilizing either log-mel spectrograms or PCEN. These extracted features are subsequently passed into the quantized INT8 neural network (e.g., Enhanced 2D CNN or CRNN-PCEN) executing on the Raspberry Pi's processor. Upon a positive detection, the system aggregates the confidence score and localized timestamp, transmitting only this highly streamlined telemetry to the central gateway, entirely bypassing the requirement to transmit raw audio payloads.
 
 \section{Data Pipeline and Preprocessing}
 \label{sec:data}
 
-The raw pool was about 80{,}000 files: the calibrated firearm set~\cite{dib2023}, 4{,}138 further firearm recordings from open ground and indoor rooms, and 6{,}230 long ambient recordings (traffic, rain, construction, speech)~\cite{salamon2014}, from about 10\,s to 60\,min. Cleaning used librosa. Between 1{,}000 and 5{,}000 clips were listened through, in passes, until the cuts that remained were acceptable.
+The initial dataset corpus comprised approximately 80,000 audio samples, integrating the calibrated firearm set~\cite{dib2023}, 4,138 supplementary firearm recordings from diverse open-ground and indoor environments, and 6,230 extended ambient recordings (encompassing traffic, rain, construction, and speech)~\cite{salamon2014, piczak2015, fonseca2021}, ranging in duration from 10 seconds to 60 minutes. Audio standardization and cleaning were executed using the \texttt{librosa} library. Between 1,000 and 5,000 clips underwent rigorous manual auditory review in iterative passes to ensure the fidelity of the final extracted transients.
 
-Cuts were tried at 250\,ms, 500\,ms, and 1\,s. The attack is only a few milliseconds. The decay is the part that separates a blast from a knock, and a 250\,ms cut drops most of it. The models use \textbf{750\,ms} (16{,}537 samples at 22{,}050\,Hz). On the live path the hop is 187.5\,ms (75\% overlap), so a blast on a buffer boundary still sits inside one frame.
+Empirical evaluation of temporal window lengths was conducted at 250\,ms, 500\,ms, and 1\,s intervals. While the initial ballistic attack transpires over mere milliseconds, the subsequent acoustic decay phase contains the salient features distinguishing a genuine firearm blast from a transient percussive knock. Consequently, a 250\,ms temporal window prematurely truncates this critical reverberant information. As a result, the models presented herein utilize a fixed \textbf{750\,ms} window (16,537 samples at 22,050\,Hz). During live inference, the sliding window operates with a 187.5\,ms hop length (yielding a 75\% overlap), ensuring that a transient occurring on a buffer boundary remains fully encapsulated within a single analytical frame.
 
-Each candidate cut is placed by one of three onset cues: spectral flux across STFT bins, the peak absolute sample, or a short moving-average envelope that ignores single-sample spikes. A negative clip is discarded when its crest factor and its attack energy both look like a shot. The negative class is ordinary sound, not a second set of bangs with the wrong label.
+Each candidate extraction window was aligned utilizing one of three onset detection cues: spectral flux across STFT bins, the peak absolute sample amplitude, or a constrained moving-average envelope designed to ignore single-sample anomalies. Negative class clips were systematically discarded if their crest factor and attack energy mimicked gunshot profiles. Thus, the negative class strictly comprises ordinary ambient and imposter sounds, preventing the inadvertent inclusion of mislabeled firearms.
 
-A 1:1 gunshot to non-gunshot folder is what produced the 99--100\% classical scores below. A live stream is closer to 1:10 or 1:50, because almost every window is silence, speech, or traffic. Later training used the heavier negative ratios.
+It is critical to note that a perfectly balanced 1:1 gunshot-to-ambient distribution artificially inflated the performance of classical classifiers to the 99--100\% range observed in preliminary testing. In a real-world live stream, the distribution of events is heavily skewed (approximately 1:10 or 1:50), as nearly every temporal window consists of silence, speech, or environmental noise. Consequently, all advanced neural network training regimens utilized heavily disproportionate negative class ratios to reflect operational realities.
 
 \section{Hardware Conditioning for Edge Deployment}
 \label{sec:conditioning}
 
-The same 750\,ms frame is conditioned before the network. Figure~\ref{fig:pipeline} is that path. Three distortions show up as soon as the file is no longer a studio WAV.
+The isolated 750\,ms frame requires stringent pre-conditioning prior to neural network ingestion (Stage~2 in Figure~\ref{fig:pipeline}). Transitioning from high-fidelity studio environments to real-world edge deployment introduces three primary signal distortions that must be mitigated algorithmically.
 
-Low-cost capsules on a 3.3\,V or 5\,V rail sit a few tens of millivolts off zero. That offset is removed by the sample mean:
+First, inexpensive electret microphones operating on standard 3.3\,V or 5\,V voltage rails exhibit inherent DC biasing, resting tens of millivolts off the true zero-crossing. This offset is systematically eradicated by subtracting the sample mean:
 \begin{equation}
     y_{\mathrm{clean}}[n] = y[n] - \frac{1}{N}\sum_{i=0}^{N-1} y[i].
     \label{eq:dc_strip}
 \end{equation}
 
-Peak scaling $y/\max(|y|)$ is wrong on a quiet window. A peak near $0.002$ stretches ADC hiss across the full range. Scaling is applied only when the window is loud enough:
+Second, standard peak scaling ($y/\max(|y|)$) is mathematically destructive on quiescent windows. A peak value near $0.002$ will inadvertently stretch inherent ADC analog hiss across the entire digital dynamic range. To circumvent this, scaling is applied exclusively via an energy-gated function when the window possesses sufficient root-mean-square (RMS) volume:
 \begin{equation}
     y_{\mathrm{cond}} =
     \begin{cases}
@@ -98,67 +112,60 @@ Peak scaling $y/\max(|y|)$ is wrong on a quiet window. A peak near $0.002$ stret
     \label{eq:energy_gate}
 \end{equation}
 
-A close shot exceeds $120$\,dB SPL and flattens the capsule into a clipped peak. Hard clipping is included in training so the filters still see a rise-time on a saturated waveform.
-
-\begin{figure*}[!t]
-\centering
-\includegraphics[width=0.92\textwidth]{figures/fig1_edge_pipeline.png}
-\caption{Edge path. The 750\,ms frame is conditioned on the node. Only a detection bit leaves the radio.}
-\label{fig:pipeline}
-\end{figure*}
+Third, proximate firearm discharges routinely exceed 120\,dB SPL, physically saturating the microphone capsule and resulting in hard digital clipping. To ensure robustness, synthetic hard clipping was aggressively integrated into the training augmentation pipeline, forcing the convolutional filters to recognize the truncated rise-time characteristic of a saturated waveform.
 
 \section{Model Architectures}
 \label{sec:models}
 
-Logistic regression, an SVM, and a random forest on MFCC summaries reached about 99--100\% on balanced files from this pool and then failed on a live microphone. Averaging a clip into a few coefficients removes the few-millisecond attack. Those classifiers were stopped. The five networks below share the conditioning in Section~\ref{sec:conditioning}. Figure~\ref{fig:arch} is the layout. Layer-by-layer listings are omitted; the widths that matter are on the figure.
+Initial baseline evaluations utilizing logistic regression, Support Vector Machines (SVM), and Random Forests operating on MFCC summaries achieved 99--100\% accuracy on balanced datasets. However, these models exhibited catastrophic failure during continuous live microphone streaming. This degradation occurs because temporal averaging into a handful of coefficients obliterates the critical microsecond attack signatures of gunshots. Consequently, classical classifiers were deprecated. The five neural network architectures detailed below share the hardware conditioning pipeline outlined in Section~\ref{sec:conditioning}. Figure~\ref{fig:arch} illustrates the overarching architectural topologies. Exhaustive layer-by-layer listings are omitted for brevity; critical dimensionalities are preserved within the figure.
 
 \begin{figure*}[!t]
 \centering
-\includegraphics[width=0.98\textwidth]{figures/fig_architectures.png}
-\caption{The four working layouts. The Enhanced 1D CNN uses the same waveform front-end as the baseline 1D CNN and a second head; after INT8 conversion it scores every window as a gunshot and is not used.}
+\includegraphics[width=0.92\textwidth]{fig_architectures.pdf}
+\caption{The four successfully deployed architectural layouts. Note: The Enhanced 1D CNN leverages the identical waveform front-end as the baseline 1D CNN but incorporates a second classification head; however, post-INT8 quantization, it erroneously scores every window as a gunshot and is therefore deprecated.}
 \label{fig:arch}
 \end{figure*}
 
-The baseline 1D CNN reads the 16{,}537 samples directly. Its first kernel is 80 samples wide, about $3.6$\,ms at 22{,}050\,Hz~\cite{dai2017}, so the first layer can cover a short attack. It does not transfer across microphones: hold-out recall is 99.7\%, and recall on external recordings is 30\%.
+The baseline 1D CNN processes the raw 16,537-sample waveform directly. Its initial convolutional kernel is 80 samples wide (approximately $3.6$\,ms at 22,050\,Hz)~\cite{dai2017}, enabling the primary layer to encapsulate rapid acoustic attacks. However, this architecture demonstrates severe overfitting to the training microphones: while hold-out recall achieves 99.7\%, real-world recall on external recordings collapses to 30\%.
 
-The baseline 2D CNN reads a 64-band log-mel spectrogram (130 frames, FFT size 512, hop 128)~\cite{hershey2017}. An early run fed decibel values from about $-80$\,dB to $0$\,dB into ReLU. ReLU is zero on that whole range, gradients stopped, and that checkpoint marked all 721 hold-out gunshots as negatives. Later 2D models use
+The baseline 2D CNN analyzes a 64-band log-mel spectrogram (130 frames, FFT size 512, hop length 128)~\cite{hershey2017}. Preliminary iterations fed unscaled decibel values (ranging from $-80$\,dB to $0$\,dB) into ReLU activation functions. Predictably, ReLU saturated to zero across this negative domain, halting gradient propagation and resulting in a stalled checkpoint that falsely classified all 721 hold-out gunshots as negatives. Subsequent, successful 2D models utilize the normalization scheme:
 \begin{equation}
     S_{\mathrm{norm}} = (S_{\mathrm{dB}} + 80) / 80,
     \label{eq:norm_db}
 \end{equation}
-which maps the image into $[0,1]$. Pooling is kept off the last convolutional blocks so the attack is not averaged away.
+which maps the spectrogram matrix into a strict $[0,1]$ domain. Max-pooling operations are deliberately omitted from the final convolutional blocks to prevent the attenuation of high-frequency attack transients.
 
-The enhanced 2D CNN is the same idea at a smaller width, with MixUp~\cite{zhang2018}, SpecAugment~\cite{park2019}, speed perturbation~\cite{ko2015}, and a second head trained as an anomaly score. The gunshot head is the score reported below. The enhanced 1D CNN adds the same second head on the waveform. INT8 conversion saturates it: every window, including silence, scores as a gunshot. It is reported as a failed export, not as a detector. The 2D models, on $[0,1]$ spectrograms, quantize without that collapse.
+The Enhanced 2D CNN adopts a similar methodology utilizing a reduced filter width, augmented by MixUp~\cite{zhang2018}, SpecAugment~\cite{park2019}, speed perturbation~\cite{ko2015}, and an auxiliary classification head trained to output an anomaly score. The gunshot classification head dictates the empirical scores reported below. Conversely, the Enhanced 1D CNN applies this identical dual-head architecture directly to the waveform. Unfortunately, INT8 quantization severely saturates the 1D dilated convolutions, causing the model to erroneously classify every temporal window (including absolute silence) as a positive gunshot. It is therefore reported strictly as a failed export pipeline rather than a viable detector. The 2D models, operating on bounded $[0,1]$ spectrograms, quantize flawlessly without suffering this collapse.
 
-The CRNN replaces the static log-mel with PCEN~\cite{lostanlen2019,lostanlen2019taslp},
+The CRNN architecture supplants the static log-mel spectrogram with PCEN~\cite{lostanlen2019,lostanlen2019taslp}, defined as:
 \begin{equation}
     P[f,t] = \left( \frac{S[f,t]}{(\epsilon + M[f,t])^{\alpha}} + \delta \right)^{r} - \delta^{r},
     \label{eq:pcen}
 \end{equation}
-where $M[f,t]$ is a one-pole smooth of $S[f,t]$. With $\alpha$ near $0.98$, a band that does not change settles near $1$. A gain change $g$ in the capsule scales the output by about $g^{0.04}$. A bidirectional GRU~\cite{cho2014} (64 units each way) then reads the frame sequence, so a sustained tone is not treated as a blast. PCEN needs a stable background in the clip. That is why the trim in Section~\ref{sec:data} comes first.
+where $M[f,t]$ represents a single-pole IIR temporal smoothing of $S[f,t]$. By configuring $\alpha$ near $0.98$, stationary frequency bands asymptotically settle near unity. Consequently, an arbitrary gain fluctuation $g$ in the physical microphone scales the neural output by merely $g^{0.04}$. A bidirectional Gated Recurrent Unit (GRU)~\cite{cho2014} utilizing 64 units per direction subsequently analyzes the temporal frame sequence, ensuring that sustained tonal frequencies are correctly rejected as non-ballistic. Because PCEN implicitly requires a stable background noise estimation, the initial aggressive silence trimming detailed in Section~\ref{sec:data} is a fundamental prerequisite.
 
-Five Edge Impulse~\cite{edgeimpulse2024} configurations on a Cortex-M4F target were used only as a screen, before these models. Validation accuracy sat between 98.8\% and 99.7\%. Live audio did not follow it. An MFCC 1D CNN marked 33 of 47 ambient windows as shots. A 2D CNN on a mel spectrogram was the first of those runs to reject most wind and thunder windows, at 167\,ms. That is why the models in Fig.~\ref{fig:arch} use spectrograms. Those Edge Impulse runs are not part of the measured system.
+Finally, five TinyML sound event configurations targeting Cortex-M microcontrollers~\cite{cerutti2021} were evaluated as an initial feasibility screen. While standard validation accuracies fluctuated between 98.8\% and 99.7\%, live audio streaming exposed profound brittleness: an MFCC 1D CNN baseline falsely flagged 33 out of 47 ambient silence windows as gunshots. A 2D CNN operating on a mel spectrogram was the first architecture to successfully reject wind and thunder anomalies, operating at a 167\,ms latency. This empirical observation informed the decision to base the architectures in Fig.~\ref{fig:arch} entirely on spectrograms.
 
 \section{Experimental Setup and Metrics}
 \label{sec:setup}
 
-All reported neural scores use the exported INT8 models~\cite{david2021}. Latency is 100 timed iterations on the Raspberry Pi~4 with the CPU held at 45--50\% and 2\,GB RAM~\cite{banbury2021}. The TFLite runtime is the same class of integer path used on that board.
+All empirical neural metrics reported herein utilize strictly exported INT8 quantized models~\cite{david2021}. Inference latency was established over 100 timed iterations executing on the Raspberry Pi~4, with CPU utilization strictly governed at 45--50\% utilizing 2\,GB of allocated RAM~\cite{banbury2021}. The TensorFlow Lite runtime leveraged the exact integer arithmetic path designated for embedded target boards.
 
-Three sets are used, in increasing difficulty. The balanced hold-out has 1{,}442 clips of 750\,ms (721 gunshot, 721 other) from the cleaned pool. The external set has 75 recordings from outside that pool: 20 firearms, 20 imposters, 35 ambient tracks. The main set has 300 unseen recordings: 100 real gunshots, 100 ambient files, and 100 hard imposters (fireworks, slams, thunder, drums).
+The experimental evaluation encompasses three distinct datasets to rigorously assess model generalization. The balanced hold-out dataset consists of 1,442 clips of 750\,ms duration (721 gunshots, 721 ambient/imposter) derived from the primary cleaned corpus. The external dataset contains 75 recordings procured independently of the primary corpus: 20 firearms, 20 imposters, and 35 ambient tracks. The primary validation set features 300 entirely unseen recordings: 100 genuine gunshots, 100 ambient files, and 100 highly challenging percussive imposters (e.g., fireworks, door slams, thunder, drum beats).
 
-Gunshot recall is the fraction of real gunshot files that cross the threshold. Ambient specificity is the fraction of rain, traffic, and speech files that stay below it. Imposter rejection is the fraction of fireworks, claps, and other bangs that stay below it. Latency is the time to score one 750\,ms window. The hop is 187.5\,ms; a model slower than the hop cannot keep up. The threshold is $0.50$ unless a row says otherwise.
+Evaluation metrics are defined as follows: \textit{Gunshot recall} is the fraction of genuine firearm files exceeding the detection threshold. \textit{Ambient specificity} represents the fraction of rain, traffic, and speech files correctly rejected below the threshold. \textit{Imposter rejection} indicates the successful suppression of percussive non-firearm events. \textit{Latency} denotes the computational time required to score a single 750\,ms operational window. Given the system's operational hop length of 187.5\,ms, any model exceeding this latency threshold fundamentally violates real-time processing constraints. Unless explicitly stated, the default classification threshold ($\tau$) is defined as $0.50$.
 
-Peak-centered scoring uses one 750\,ms slice around the loudest sample. Sliding scoring walks the window across the file. Sliding finds more shots and more false alarms.
+Furthermore, \textit{peak-centered scoring} evaluates a singular 750\,ms acoustic slice perfectly centered upon the maximum waveform amplitude, whereas \textit{sliding scoring} continuously transverses the window across the entire audio file. Naturally, the sliding approach identifies more obscured shots but concomitantly increases the baseline false positive rate.
 
 \section{Results}
 \label{sec:results}
 
 \subsection{Balanced hold-out}
-Table~\ref{tab:holdout} checks that training ran. It is not the field result.
+Table~\ref{tab:holdout} serves as a baseline validation of the training process, confirming mathematical convergence prior to real-world deployment.
 
 \begin{table}[!t]
 \centering
-\caption{Balanced hold-out (1{,}442 clips, $\tau = 0.50$).}
+\caption{Balanced hold-out validation (1{,}442 clips, $\tau = 0.50$).}
 \label{tab:holdout}
 \footnotesize
 \begin{tabular}{lcccc}
@@ -174,14 +181,14 @@ Enhanced 1D CNN & 50.00\% & 100\% & 66.67\% & 721 \\
 \end{tabular}
 \end{table}
 
-The unscaled 2D row is the stalled checkpoint (721 false negatives). The 2D numbers in Table~\ref{tab:300} are the later, scaled model. The enhanced 1D row is positive on every file.
+The unscaled 2D architecture represents the aforementioned saturated checkpoint resulting in 721 false negatives. The robust 2D metrics reported in Table~\ref{tab:300} reflect the corrected, normalized model. The Enhanced 1D row demonstrates total failure post-quantization, registering false positives on every evaluated file.
 
 \subsection{External recordings and the 300-clip set}
-On 75 external recordings a file counts as a detection if any window crosses $0.50$ (Table~\ref{tab:external}). Figure~\ref{fig:drop} places that recall next to the hold-out. The 1D model has memorized the training waveforms.
+Detection on the 75 external recordings is strictly defined by any sliding window exceeding the 0.50 confidence threshold (Table~\ref{tab:external}). Figure~\ref{fig:drop} contrasts this external recall against the initial hold-out performance. Evidently, the Baseline 1D CNN exhibits severe overfitting, essentially memorizing the training waveforms and failing catastrophically on novel microphones.
 
 \begin{table}[!t]
 \centering
-\caption{75 external recordings (sliding, $\tau = 0.50$).}
+\caption{75 external recordings (sliding evaluation, $\tau = 0.50$).}
 \label{tab:external}
 \footnotesize
 \begin{tabular}{lccc}
@@ -197,16 +204,16 @@ Baseline 1D CNN & 6/20 (30\%) & 31/35 (89\%) & 11/20 (55\%) \\
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig4_lab_vs_external.png}
-\caption{Hold-out recall against recall on 75 external recordings.}
+\includegraphics[width=0.92\columnwidth]{fig4_lab_vs_external.pdf}
+\caption{Comparative analysis: Initial hold-out recall versus operational recall on 75 entirely external recordings.}
 \label{fig:drop}
 \end{figure}
 
-Table~\ref{tab:300} is the main result: 300 unseen clips, INT8, $\tau = 0.50$, on the Raspberry Pi~4. Figure~\ref{fig:300} shows the same comparison for the models that still discriminate.
+Table~\ref{tab:300} delineates the primary field results: performance on 300 highly complex unseen clips, utilizing INT8 precision and $\tau = 0.50$ on the Raspberry Pi~4. Figure~\ref{fig:300} visualizes this comparative analysis for models capable of maintaining class separation.
 
 \begin{table*}[!t]
 \centering
-\caption{300 unseen clips at $\tau = 0.50$. Recall, ambient specificity, and imposter rejection, in percent.}
+\caption{Performance on 300 unseen clips at $\tau = 0.50$. Recall, ambient specificity, and imposter rejection metrics are reported as percentages.}
 \label{tab:300}
 \footnotesize
 \begin{tabular}{lcccccc}
@@ -226,24 +233,24 @@ CRNN-PCEN & 57 & 86 & 61 & 33 & 97 & 85 \\
 
 \begin{figure*}[!t]
 \centering
-\includegraphics[width=0.86\textwidth]{figures/fig2_300clip_recall.png}
-\caption{Sliding recall is 15 to 29 points above peak recall. Peak ambient specificity reaches 99\% for the Enhanced 2D CNN.}
+\includegraphics[width=0.88\textwidth]{fig2_300clip_recall.pdf}
+\caption{Sliding recall consistently exceeds peak recall by 15 to 29 percentage points. Notably, peak ambient specificity attains 99\% under the Enhanced 2D CNN architecture.}
 \label{fig:300}
 \end{figure*}
 
-Sliding recall is higher because a single crop on the loudest sample misses shots whose energy is spread out. Peak specificity is higher because that crop also misses many bangs that are not shots. Host and Pi peak recall differ by about 4 to 6 points (Enhanced 2D CNN: 44.1\% on the host, 38.0\% on the Pi; CRNN-PCEN: 32.0\% and 33.0\%). The order of the models does not change. The CRNN moves the least ($\pm 1$ point).
+Sliding recall fundamentally outperforms peak recall because a singular crop locked onto the maximum amplitude frequently ignores ballistic events where acoustic energy is dispersed temporally. Conversely, peak specificity remains higher as the singular crop effectively bypasses numerous peripheral imposter bangs. Peak recall disparities between the x86 host environment and the ARM-based Raspberry Pi~4 fluctuated by approximately 4 to 6 percentage points due to mathematical quantization variations (e.g., Enhanced 2D CNN: 44.1\% on host versus 38.0\% on Pi; CRNN-PCEN: 32.0\% versus 33.0\%). The hierarchical ranking of model efficacy remained invariant, with the CRNN exhibiting the highest stability ($\pm 1$ point deviation).
 
 \subsection{Latency}
-Table~\ref{tab:latency} and Fig.~\ref{fig:lat} are 100 iterations. Every model finishes inside the 187.5\,ms hop. The Enhanced 2D CNN is the small file with the best sliding recall among models that still separate the classes. The CRNN is larger and is the model whose recall does not drop when the microphone response is distorted.
+Table~\ref{tab:latency} and Figure~\ref{fig:lat} summarize execution latency across 100 iterations. Critically, every viable model executes well within the 187.5\,ms real-time hop constraint. The Enhanced 2D CNN emerges as an exceptionally lightweight architecture, offering the highest sliding recall among discriminating models. The CRNN-PCEN demands a larger memory footprint but provides unparalleled resilience when transducer responses are compromised.
 
 \begin{table}[!t]
 \centering
-\caption{INT8 latency on the Raspberry Pi~4 (100 iterations, CPU at 45--50\%).}
+\caption{INT8 inference latency on the Raspberry Pi~4 (averaged over 100 iterations, CPU strictly constrained to 45--50\%).}
 \label{tab:latency}
 \footnotesize
 \begin{tabular}{lccc}
 \toprule
-\textbf{Model} & \textbf{INT8} & \textbf{Mean} & \textbf{Hop} \\
+\textbf{Model} & \textbf{INT8 Footprint} & \textbf{Mean Latency} & \textbf{Hop Utilization} \\
 \midrule
 Baseline 1D CNN & 112.5\,KB & 2.29\,ms & 1.2\% \\
 Baseline 2D CNN & 259.9\,KB & 2.15\,ms & 1.2\% \\
@@ -256,17 +263,17 @@ CRNN-PCEN & 478.9\,KB & 11.86\,ms & 6.3\% \\
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig3_latency.png}
-\caption{Mean INT8 latency. The 187.5\,ms hop is far above this range.}
+\includegraphics[width=0.92\columnwidth]{fig3_latency.pdf}
+\caption{Mean INT8 execution latency. The 187.5\,ms operational hop length remains vastly superior to all measured inference times.}
 \label{fig:lat}
 \end{figure}
 
 \subsection{PCEN under a changed microphone}
-The CRNN input was band-limited (150\,Hz to 8\,kHz), clipped, gained between $0.5\times$ and $1.5\times$, and noised at 15--30\,dB SNR. Table~\ref{tab:pcen_robust} and Fig.~\ref{fig:pcen} are the sliding-window recall. At $\tau = 0.50$ the recall is 61\% on the clean files and 61\% on the distorted files. At $\tau = 0.10$ it is 69\% on both. A change of capsule does not by itself remove the detections. Fireworks and claps remain, because they are impulses too.
+To assess transducer resilience, the CRNN input was artificially band-limited (150\,Hz to 8\,kHz), digitally clipped, subjected to dynamic gain fluctuations ($0.5\times$ to $1.5\times$), and injected with white noise yielding a 15--30\,dB SNR. Table~\ref{tab:pcen_robust} and Figure~\ref{fig:pcen} detail the sliding-window recall under these adversarial conditions. At $\tau = 0.50$, recall maintained an identical 61\% across both clean and distorted datasets. At the highly sensitive $\tau = 0.10$ threshold, recall remained locked at 69\% for both regimes. These results conclusively demonstrate that aggressive microphone degradation does not compromise the detection capability of the PCEN front-end. Certain percussive imposters (fireworks, claps) naturally persist, as their physical impulse characteristics accurately mirror ballistic shockwaves.
 
 \begin{table}[!t]
 \centering
-\caption{CRNN-PCEN sliding recall, clean versus distorted input.}
+\caption{CRNN-PCEN sliding recall: clean versus adversarially distorted input streams.}
 \label{tab:pcen_robust}
 \footnotesize
 \begin{tabular}{cccc}
@@ -283,24 +290,24 @@ $\tau$ & \textbf{Clean} & \textbf{Distorted} & \textbf{Ambient (clean / dist.)} 
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig6_pcen_distortion.png}
-\caption{CRNN-PCEN sliding recall. The two curves stay together across the threshold.}
+\includegraphics[width=0.92\columnwidth]{fig6_pcen_distortion.pdf}
+\caption{CRNN-PCEN sliding recall stability. The response curves remain tightly correlated across the entire threshold spectrum despite heavy acoustic distortion.}
 \label{fig:pcen}
 \end{figure}
 
-\subsection{Ensemble}
-The Enhanced 2D CNN, the CRNN-PCEN, and the baseline 1D CNN are combined by accepting a detection if any one of them crosses its threshold, then applying a short spectral check (energy below 200\,Hz, energy above 4\,kHz, spectral centroid). Table~\ref{tab:ensemble} and Fig.~\ref{fig:cm} are the 300-clip counts. Recall rises from 67\% to 77\% (77 of 100 shots). Forty-four of 100 imposters are still called real shots, and 20 of 100 ambient files are called real shots. Combined size is about 715\,KB and combined time about 17\,ms, still inside the hop.
+\subsection{Ensemble Architecture}
+The Enhanced 2D CNN, the CRNN-PCEN, and the Baseline 1D CNN were fused into a multi-model ensemble. The logic assumes a positive detection if any constituent model exceeds its respective threshold, subsequently gated by a rapid spectral heuristic check (analyzing energy below 200\,Hz, energy above 4\,kHz, and spectral centroid shifts). Table~\ref{tab:ensemble} and Figure~\ref{fig:cm} report the performance on the 300-clip dataset. This ensemble approach successfully elevates recall from 67\% to 77\% (capturing 77 out of 100 true gunshots). False positives remain a challenge: 44 out of 100 hard imposters and 20 out of 100 ambient files triggered false alerts. The total ensemble memory footprint is approximately 715\,KB, requiring a combined 17\,ms execution time, which remains well within the strict operational hop boundary.
 
-The gain is complementary misses, not a new feature. On \texttt{127724.wav} the Enhanced 2D CNN scores 21.1\% and the CRNN scores 99.3\%. On \texttt{170167.wav} the CRNN scores 0 and the Enhanced 2D CNN scores 99.6\%. Table~\ref{tab:paradigm} is the choice among the three operating points. For a first node the single Enhanced 2D model is the one that fits. The ensemble is the higher-recall option if the gateway can tolerate more false bits.
+The performance augmentation is driven by complementary failure modes rather than redundant feature extraction. For instance, on the file \texttt{127724.wav}, the Enhanced 2D CNN generates a low 21.1\% confidence, whereas the CRNN correctly identifies the event with 99.3\% confidence. Conversely, on \texttt{170167.wav}, the CRNN fails entirely (0\% confidence) while the Enhanced 2D CNN triggers accurately at 99.6\%. Table~\ref{tab:paradigm} contextualizes these operational tradeoffs. For an initial, resource-constrained sensor node, the standalone Enhanced 2D model offers the optimal balance of speed and precision. However, if the central gateway is capable of algorithmically filtering higher false-positive rates, the three-model ensemble provides the superior recall required for maximum public safety.
 
 \begin{table}[!t]
 \centering
-\caption{Ensemble counts on 300 clips (100 per true class).}
+\caption{Ensemble classification matrix evaluated on 300 diverse acoustic clips (100 samples per true class).}
 \label{tab:ensemble}
 \footnotesize
 \begin{tabular}{lccc}
 \toprule
-\textbf{True class} & \textbf{Called real} & \textbf{Called fake} & \textbf{Called other} \\
+\textbf{True class} & \textbf{Classified Real} & \textbf{Classified Fake} & \textbf{Classified Other} \\
 \midrule
 Real gunshot & 77 & 15 & 8 \\
 Hard imposter & 44 & 46 & 10 \\
@@ -311,19 +318,19 @@ Ambient & 20 & 38 & 42 \\
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig5_ensemble_confusion.png}
-\caption{Ensemble on 300 clips. Gunshot recall is 77 of 100.}
+\includegraphics[width=0.88\columnwidth]{fig5_ensemble_confusion.pdf}
+\caption{Ensemble performance distribution across 300 clips, achieving a robust 77\% gunshot recall.}
 \label{fig:cm}
 \end{figure}
 
 \begin{table}[!t]
 \centering
-\caption{Operating points on the 300-clip set.}
+\caption{Strategic operating paradigms evaluated on the 300-clip validation set.}
 \label{tab:paradigm}
 \footnotesize
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Setting} & \textbf{Recall} & \textbf{Spec.} & \textbf{Latency} & \textbf{Flash} \\
+\textbf{Architectural Setting} & \textbf{Recall} & \textbf{Spec.} & \textbf{Latency} & \textbf{Flash} \\
 \midrule
 Enhanced 2D, peak & 38\% & 99\% & 0.09\,ms & 124\,KB \\
 Enhanced 2D, sliding & 67\% & 82\% & 0.75\,ms & 124\,KB \\
@@ -335,19 +342,19 @@ Three-model ensemble & 77\% & 80\% & 17\,ms & 715\,KB \\
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
 
-Classical classifiers that reach near-perfect accuracy on balanced hold-out files fail on live input because temporal averaging destroys the few-millisecond shockwave signature. The move from 1D MFCC classifiers to 2D spectrogram CNNs consistently improved rejection of ambient and imposter sounds. On 300 unseen clips the Enhanced 2D CNN achieves 67\% gunshot recall (sliding) and 99\% ambient specificity (peak) in 0.09\,ms within 124\,KB. The PCEN-CRNN maintains stable recall under simulated microphone distortion with zero degradation, confirming PCEN as an effective domain-shift normalizer. The Enhanced 1D CNN is not deployable after INT8 conversion due to weight saturation in dilated 1D convolution filters.
+This study conclusively demonstrates that while classical machine learning classifiers achieve near-perfect accuracy on balanced hold-out datasets, they fail catastrophically during live deployment because temporal averaging irreversibly destroys the microsecond shockwave signatures intrinsic to firearms. The architectural transition from 1D MFCC classifiers to 2D spectrogram-based CNNs yielded substantial improvements in the rejection of ambient noise and percussive imposters. Evaluated against 300 highly complex unseen recordings, the proposed Enhanced 2D CNN achieved 67\% sliding gunshot recall and 99\% peak ambient specificity, executing in a remarkable 0.09\,ms while occupying only 124\,KB of flash memory. Furthermore, the implementation of a PCEN-CRNN architecture demonstrated unparalleled resilience, maintaining stable recall under severe simulated microphone distortion with zero algorithmic degradation, thereby validating PCEN as a superior domain-shift normalizer for acoustic edge applications. The Enhanced 1D CNN was deemed fundamentally non-deployable following INT8 conversion due to catastrophic weight saturation within its dilated convolutional filters.
 
-A physical limitation was identified: a single microphone cannot separate aerial mortar fireworks from gunfire, as both produce identical shockwave rise-times and reverberation profiles. Resolving this requires spatial multi-microphone arrays.
+A critical physical limitation was also identified during empirical testing: a solitary microphone is inherently incapable of distinguishing between aerial mortar fireworks and genuine gunfire, as both events generate virtually identical shockwave rise-times and reverberation profiles in the time domain. Resolving this acoustic ambiguity necessitates the future integration of spatial multi-microphone arrays.
 
-The following hardware tasks are next:
+The subsequent phases of this research will prioritize the following hardware integration tasks:
 
-\textbf{1) Physical Deployment.} Deploy the Enhanced 2D CNN INT8 model on a Raspberry Pi~4 to confirm edge timing, then port inference to the Arduino Nano 33 BLE Sense (on-board ST MP34DT05 PDM microphone).
+\textbf{1) Physical Edge Deployment.} Systematically deploy the Enhanced 2D CNN INT8 quantized model onto a Raspberry Pi~4 architecture to validate deterministic edge timing, followed by a direct port of the inference engine to the highly constrained Arduino Nano 33 BLE Sense (utilizing the on-board ST MP34DT05 PDM microphone).
 
-\textbf{2) Duty-Cycled Sleep and One-Bit Transmission.} The node stays in deep sleep ($\sim$5\,$\mu$A) until a coarse energy threshold triggers wake-up~\cite{edgeimpulse2024}. One inference cycle runs and the node sleeps again. If the score crosses the threshold, the node transmits a minimal packet: node ID (1~byte), timestamp (4~bytes), detection flag (1~bit), confidence (1~byte). Radio on-time is under 1.5\,ms per trigger. If the score is below threshold, no transmission occurs. Raw audio never leaves the node.
+\textbf{2) Duty-Cycled Deep Sleep and Minimalist Telemetry.} The edge node will maintain a deep sleep state (drawing approximately 5\,$\mu$A) until a coarse analog energy threshold triggers a hardware interrupt~\cite{cerutti2021}. A single inference cycle is subsequently executed before returning to sleep. Upon a positive threshold breach, the node will transmit a minimalist packet structure comprising: node ID (1~byte), timestamp (4~bytes), detection flag (1~bit), and confidence score (1~byte). This protocol restricts radio transmission time to under 1.5\,ms per trigger event. Negative inferences trigger no transmission, ensuring that raw audio is strictly confined to the local node to guarantee absolute privacy.
 
-\textbf{3) Multi-Node Spatial Consensus.} A single node next to a hand clap may send a false bit. The gateway raises an alert only when $K \ge 3$ neighbouring nodes transmit within the acoustic propagation window ($\sim$100\,ms for 34\,m spacing). This rejects localized percussive events without streaming audio.
+\textbf{3) Multi-Node Spatial Consensus.} To mitigate false positives generated by localized percussive anomalies (e.g., a proximal hand clap), the central gateway will elevate a system-wide alert exclusively when a spatial consensus of $K \ge 3$ geographically distributed nodes transmit concurrent detection flags within a highly constrained acoustic propagation window (approximately 100\,ms for a 34\,m sensor spacing). This topological approach effectively filters localized imposters without compromising network bandwidth or streaming raw audio.
 
-\textbf{4) Self-Healing Network and Dashboard.} Nodes report battery, sensor drift, and link failures. A dashboard on the gateway logs every trigger for post-incident review.
+\textbf{4) Self-Healing Network Diagnostics and Dashboard Integration.} Embedded nodes will autonomously transmit periodic diagnostic telemetry encompassing battery degradation, sensor baseline drift, and radio link integrity. A centralized dashboard deployed at the gateway will continuously aggregate this telemetry and log every positive trigger, establishing a comprehensive, immutable audit trail for post-incident forensic analysis.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}

@@ -14,7 +14,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, Rectangle
+from matplotlib.patches import FancyBboxPatch, Rectangle, Polygon, Arc
 import numpy as np
 
 # TrueType vector font embeddings (prevents bitmap blurriness in PDF)
@@ -41,6 +41,8 @@ RUST   = "#991b1b"
 PURPLE = "#6b21a8"
 DARK   = "#0f172a"
 SLATE  = "#334155"
+MUTED  = "#475569"
+BORDER = "#1e293b"
 
 
 def save(fig, name, do_tight=True):
@@ -62,225 +64,222 @@ def save(fig, name, do_tight=True):
 
 
 # ==============================================================================
-# FIGURE 1: STREAMLINED EDGE PROCESSING PIPELINE (TWO-COLUMN, COMPACT)
 # ==============================================================================
-# ==============================================================================
-# FIGURE 1: STREAMLINED EDGE PROCESSING PIPELINE (TWO-COLUMN, COMPACT)
+# FIGURE 1: STREAMLINED EDGE PROCESSING PIPELINE (PUBLICATION-GRADE)
 # ==============================================================================
 def fig_edge_pipeline():
-    fig, ax = plt.subplots(figsize=(15.2, 2.75), dpi=300)
-    ax.set_xlim(0, 15.2)
-    ax.set_ylim(0, 2.75)
+    fig, ax = plt.subplots(figsize=(14.2, 3.4), dpi=300)
+    ax.set_xlim(0, 14.2)
+    ax.set_ylim(0, 3.4)
     ax.axis("off")
 
-    # Boundary Box for On-Device Raspberry Pi 4 (Stages 2 to 7)
-    rpi_box = FancyBboxPatch((3.82, 0.06), 11.20, 2.62,
-                             boxstyle="round,pad=0.06,rounding_size=0.10",
+    # Boundary box: Raspberry Pi 4 on-device boundary
+    rpi_box = FancyBboxPatch((3.50, 0.28), 10.50, 2.95,
+                             boxstyle="round,pad=0.04,rounding_size=0.08",
                              facecolor="#f8fafc", edgecolor="#475569",
-                             linestyle="--", linewidth=1.6, zorder=0)
+                             linestyle="--", linewidth=1.5, zorder=0)
     ax.add_patch(rpi_box)
-    ax.text(9.42, 2.56,
-            "ON-DEVICE EMBEDDED COMPUTING BOUNDARY (RASPBERRY PI 4) — ZERO AUDIO STREAMING",
-            ha="center", va="center", fontsize=10.5, fontweight="bold", color="#1e293b")
+    ax.text(8.75, 3.10, "ON-DEVICE EMBEDDED COMPUTING BOUNDARY (RASPBERRY PI 4) — ZERO AUDIO STREAMING",
+            ha="center", va="center", fontsize=9.5, fontweight="bold", color="#334155", zorder=2)
 
-    cw = 2.92
-    ch = 0.96
+    bw = 2.45
+    bh = 0.95
+    col_x = [0.15, 3.65, 7.15, 10.65]
+    top_y = 1.88
+    bot_y = 0.45
 
-    col_x = [0.15, 3.98, 7.74, 11.50]
-    top_y = 1.42
-    bot_y = 0.16
-
-    def render_card(x, y, w, h, num, title, line1, line2, border_col, fill_col, is_gateway=False):
-        card = FancyBboxPatch((x, y), w, h,
-                              boxstyle="round,pad=0.03,rounding_size=0.06",
-                              facecolor=fill_col, edgecolor=border_col,
-                              linewidth=1.6, zorder=2)
-        ax.add_patch(card)
-
-        if is_gateway:
-            ax.text(x + w / 2, y + h - 0.22, title, ha="center", va="center",
-                    fontsize=11.5, fontweight="bold", color=border_col, zorder=4)
+    def draw_block(x, y, num, title, subtitle, border_color=BORDER, fill_color="#ffffff", text_color=DARK):
+        box = FancyBboxPatch((x, y), bw, bh,
+                             boxstyle="round,pad=0.02,rounding_size=0.06",
+                             facecolor=fill_color, edgecolor=border_color,
+                             linewidth=1.4, zorder=3)
+        ax.add_patch(box)
+        # 2-3 word title
+        if num:
+            ax.text(x + bw/2, y + bh - 0.30, f"{num}. {title}",
+                    ha="center", va="center", fontsize=10.2, fontweight="bold", color=text_color, zorder=4)
         else:
-            badge = FancyBboxPatch((x + 0.10, y + h - 0.30), 0.32, 0.22,
-                                   boxstyle="round,pad=0.02,rounding_size=0.04",
-                                   facecolor=border_col, edgecolor=border_col, zorder=3)
-            ax.add_patch(badge)
-            ax.text(x + 0.26, y + h - 0.19, num, ha="center", va="center",
-                    fontsize=10.0, fontweight="bold", color="white", zorder=4)
-            ax.text(x + 0.50, y + h - 0.19, title, ha="left", va="center",
-                    fontsize=11.5, fontweight="bold", color=border_col, zorder=4)
+            ax.text(x + bw/2, y + bh - 0.30, title,
+                    ha="center", va="center", fontsize=10.2, fontweight="bold", color=text_color, zorder=4)
+        # 1-line parameter subtitle
+        ax.text(x + bw/2, y + 0.28, subtitle,
+                ha="center", va="center", fontsize=8.2, fontweight="bold", color="#475569", zorder=4)
 
-        # Subtle divider
-        ax.plot([x + 0.10, x + w - 0.10], [y + h - 0.35, y + h - 0.35],
-                color=border_col, linewidth=0.8, alpha=0.35, zorder=3)
+    # Top row (Stages 1-4)
+    draw_block(col_x[0], top_y, "1", "Acoustic Input", "22,050 Hz Continuous Stream")
+    draw_block(col_x[1], top_y, "2", "Sliding Buffer", "750 ms Frame · 187.5 ms Hop")
+    draw_block(col_x[2], top_y, "3", "Conditioning", "DC Stripping & RMS Gate")
+    draw_block(col_x[3], top_y, "4", "Feature Map", "64-Band Log-Mel / PCEN")
 
-        # Content lines
-        ax.text(x + w / 2, y + 0.38, line1, ha="center", va="center",
-                fontsize=9.8, fontweight="bold", color="#0f172a", zorder=4)
-        ax.text(x + w / 2, y + 0.14, line2, ha="center", va="center",
-                fontsize=8.8, fontweight="bold", color="#334155", zorder=4)
+    # Bottom row (Stages 5-7 + Gateway)
+    draw_block(col_x[3], bot_y, "5", "INT8 Inference", "ARM Cortex TFLite Micro")
+    draw_block(col_x[2], bot_y, "6", "Decision Gate", "Gunshot Prob Threshold τ ≥ 0.50", border_color=AMBER, fill_color="#fffbeb")
+    draw_block(col_x[1], bot_y, "7", "Alert Package", "1-Bit Flag + Timestamp (≤ 8 B)", border_color=RUST, fill_color="#fef2f2")
+    draw_block(col_x[0], bot_y, "", "Central Gateway", "Spatial Triangulation (K ≥ 3)", border_color=TEAL, fill_color="#f0fdfa")
 
-    # Row 1 (Top)
-    render_card(col_x[0], top_y, cw, ch, "1", "Acoustic Input",
-                "Continuous Electret Stream", "22,050 Hz Audio Capture",
-                DARK, "#f1f5f9")
-    render_card(col_x[1], top_y, cw, ch, "2", "Sliding Buffer",
-                "750 ms Frame (16,537 smp)", "187.5 ms Hop (75% Overlap)",
-                NAVY, "#f0f7ff")
-    render_card(col_x[2], top_y, cw, ch, "3", "Conditioning",
-                "DC Offset Removal (Eq. 1)", "RMS Energy Gating (Eq. 2)",
-                TEAL, "#f0fdf4")
-    render_card(col_x[3], top_y, cw, ch, "4", "Feature Map",
-                "64-Band Log-Mel Spectrogram", "or Dynamic PCEN (Eq. 4)",
-                PURPLE, "#faf5ff")
-
-    # Row 2 (Bottom)
-    render_card(col_x[0], bot_y, cw, ch, "G", "Central Gateway",
-                "Spatial Triangulation (K ≥ 3)", "Civilian Privacy Preserved",
-                DARK, "#f1f5f9", is_gateway=True)
-    render_card(col_x[1], bot_y, cw, ch, "7", "Alert Package",
-                "1-Bit Flag + Timestamp", "Zero Raw Audio Streamed",
-                RUST, "#fef2f2")
-    render_card(col_x[2], bot_y, cw, ch, "6", "Decision Gate",
-                "Gunshot Prob τ ≥ 0.50", "Auxiliary Anomaly Gate",
-                AMBER, "#fffbeb")
-    render_card(col_x[3], bot_y, cw, ch, "5", "INT8 Inference",
-                "TFLite Micro Runtime (ARM)", "0.09 - 11.86 ms Latency",
-                GREEN, "#f0fdf4")
-
-    # Connectors
-    def draw_arrow(x1, y1, x2, y2, col):
+    # Clean Connecting Arrows
+    def arrow(x1, y1, x2, y2, col=BORDER):
         ax.annotate("", xy=(x2, y2), xytext=(x1, y1),
-                    arrowprops=dict(arrowstyle="-|>", color=col, lw=1.8, mutation_scale=12),
+                    arrowprops=dict(arrowstyle="-|>", color=col, lw=1.6, mutation_scale=11),
                     zorder=5)
 
     # Top row forward
-    draw_arrow(col_x[0] + cw, top_y + ch / 2, col_x[1], top_y + ch / 2, DARK)
-    draw_arrow(col_x[1] + cw, top_y + ch / 2, col_x[2], top_y + ch / 2, NAVY)
-    draw_arrow(col_x[2] + cw, top_y + ch / 2, col_x[3], top_y + ch / 2, TEAL)
+    arrow(col_x[0] + bw, top_y + bh/2, col_x[1], top_y + bh/2)
+    arrow(col_x[1] + bw, top_y + bh/2, col_x[2], top_y + bh/2)
+    arrow(col_x[2] + bw, top_y + bh/2, col_x[3], top_y + bh/2)
 
     # Vertical 4 -> 5
-    draw_arrow(col_x[3] + cw / 2, top_y, col_x[3] + cw / 2, bot_y + ch, PURPLE)
+    arrow(col_x[3] + bw/2, top_y, col_x[3] + bw/2, bot_y + bh)
 
     # Bottom row backward: 5 -> 6
-    draw_arrow(col_x[3], bot_y + ch / 2, col_x[2] + cw, bot_y + ch / 2, GREEN)
+    arrow(col_x[3], bot_y + bh/2, col_x[2] + bw, bot_y + bh/2)
 
-    # 6 -> 7 with YES badge
-    gap_cx = (col_x[2] + col_x[1] + cw) / 2
-    draw_arrow(col_x[2], bot_y + ch / 2, gap_cx + 0.24, bot_y + ch / 2, AMBER)
-    draw_arrow(gap_cx - 0.24, bot_y + ch / 2, col_x[1] + cw, bot_y + ch / 2, AMBER)
-    badge_yes = FancyBboxPatch((gap_cx - 0.22, bot_y + ch / 2 - 0.12), 0.44, 0.24,
-                               boxstyle="round,pad=0.02,rounding_size=0.04",
-                               facecolor="#fffbeb", edgecolor=AMBER, lw=1.2, zorder=6)
-    ax.add_patch(badge_yes)
-    ax.text(gap_cx, bot_y + ch / 2, "YES", ha="center", va="center",
-            fontsize=8.5, fontweight="bold", color=AMBER, zorder=7)
+    # 6 -> 7 (YES)
+    arrow(col_x[2], bot_y + bh/2, col_x[1] + bw, bot_y + bh/2, col=AMBER)
+    ax.text((col_x[2] + col_x[1] + bw)/2, bot_y + bh/2 + 0.16, "YES (Threat)",
+            ha="center", va="center", fontsize=7.8, fontweight="bold", color=AMBER, zorder=6)
 
-    # 7 -> Gateway with RADIO badge
-    gap_rg = (col_x[1] + col_x[0] + cw) / 2
-    draw_arrow(col_x[1], bot_y + ch / 2, gap_rg + 0.30, bot_y + ch / 2, RUST)
-    draw_arrow(gap_rg - 0.30, bot_y + ch / 2, col_x[0] + cw, bot_y + ch / 2, RUST)
-    badge_radio = FancyBboxPatch((gap_rg - 0.28, bot_y + ch / 2 - 0.12), 0.56, 0.24,
-                                 boxstyle="round,pad=0.02,rounding_size=0.04",
-                                 facecolor="#fef2f2", edgecolor=RUST, lw=1.2, zorder=6)
-    ax.add_patch(badge_radio)
-    ax.text(gap_rg, bot_y + ch / 2, "RADIO", ha="center", va="center",
-            fontsize=8.5, fontweight="bold", color=RUST, zorder=7)
+    # 7 -> Gateway (RADIO)
+    arrow(col_x[1], bot_y + bh/2, col_x[0] + bw, bot_y + bh/2, col=RUST)
+    ax.text((col_x[1] + col_x[0] + bw)/2, bot_y + bh/2 + 0.16, "Low-Power RF",
+            ha="center", va="center", fontsize=7.8, fontweight="bold", color=RUST, zorder=6)
 
-    # Decision feedback loop: 6 -> 2
-    fb_start_x = col_x[2] + 0.20
-    fb_start_y = bot_y + ch
-    fb_end_x = col_x[1] + cw - 0.20
-    fb_end_y = top_y
-    ax.annotate("", xy=(fb_end_x, fb_end_y), xytext=(fb_start_x, fb_start_y),
-                arrowprops=dict(arrowstyle="-|>", color=SLATE, lw=1.4, ls="--", mutation_scale=10),
+    # Clean Feedback Loop: 6 -> 2 (NO: Advance Hop)
+    fb_start_x = col_x[2] + bw/2
+    fb_mid_y = (top_y + bot_y + bh)/2
+    fb_end_x = col_x[1] + bw/2
+
+    ax.plot([fb_start_x, fb_start_x], [bot_y + bh, fb_mid_y], color="#64748b", lw=1.4, ls="--", zorder=4)
+    ax.plot([fb_start_x, fb_end_x], [fb_mid_y, fb_mid_y], color="#64748b", lw=1.4, ls="--", zorder=4)
+    ax.annotate("", xy=(fb_end_x, top_y), xytext=(fb_end_x, fb_mid_y),
+                arrowprops=dict(arrowstyle="-|>", color="#64748b", lw=1.4, ls="--", mutation_scale=10),
                 zorder=4)
-    ax.text((fb_start_x + fb_end_x) / 2, (fb_start_y + fb_end_y) / 2,
-            "NO: Advance Ring Buffer (187.5 ms)",
-            ha="center", va="center", fontsize=7.6, fontweight="bold", color=SLATE,
-            bbox=dict(boxstyle="round,pad=0.12", facecolor="#ffffff", edgecolor="#94a3b8", lw=0.8),
+
+    # Clean pill badge along feedback line
+    fb_badge_x = (fb_start_x + fb_end_x)/2
+    ax.text(fb_badge_x, fb_mid_y, " NO: Advance Ring Buffer (187.5 ms) ",
+            ha="center", va="center", fontsize=8.0, fontweight="bold", color="#334155",
+            bbox=dict(boxstyle="round,pad=0.18", facecolor="#ffffff", edgecolor="#94a3b8", lw=0.9),
             zorder=6)
 
     save(fig, "fig1_edge_pipeline.png")
 
 
 # ==============================================================================
-# FIGURE 2: MODULAR WORKING NEURAL ARCHITECTURES (TWO-COLUMN, COMPACT)
+# FIGURE 2: MODULAR WORKING NEURAL ARCHITECTURES (TOPOLOGY MATRIX)
 # ==============================================================================
 def fig_architectures():
-    fig, ax = plt.subplots(figsize=(15.2, 2.75), dpi=300)
-    ax.set_xlim(0, 15.2)
-    ax.set_ylim(0, 2.75)
+    fig, ax = plt.subplots(figsize=(14.2, 4.4), dpi=300)
+    ax.set_xlim(0, 14.2)
+    ax.set_ylim(0, 4.4)
     ax.axis("off")
 
-    # Top front-end banner
-    banner = FancyBboxPatch((0.15, 2.44), 14.90, 0.26,
-                            boxstyle="round,pad=0.02,rounding_size=0.04",
-                            facecolor="#e0f2fe", edgecolor=NAVY,
+    # Top Banner: Shared Front-End
+    banner = FancyBboxPatch((0.15, 3.82), 13.90, 0.44,
+                            boxstyle="round,pad=0.02,rounding_size=0.06",
+                            facecolor="#0f172a", edgecolor="#38bdf8",
                             linewidth=1.4, zorder=2)
     ax.add_patch(banner)
-    ax.text(7.60, 2.57,
-            "SHARED FRONT-END: 750 ms Frame (16,537 smp @ 22.05 kHz)  →  DC Strip  →  RMS Energy Gate  →  INT8 Quantization",
-            ha="center", va="center", fontsize=10.0, fontweight="bold", color=NAVY, zorder=3)
+    ax.text(7.10, 4.04,
+            "SHARED EMBEDDED FRONT-END: 750 ms Frame (16,537 smp @ 22.05 kHz)  →  DC Bias Removal (Eq. 1)  →  RMS Energy Gate (Eq. 2)",
+            ha="center", va="center", fontsize=9.8, fontweight="bold", color="#f8fafc", zorder=3)
 
-    cols = [
-        (0.15, "Baseline 1D CNN", "92.5k params · 112.5 KB", NAVY, "#f0f7ff", [
-            ("Input Waveform", "(16,537, 1) Raw Audio Samples", "#ffffff", NAVY),
-            ("Convolutional Backbone", "Multi-Scale Conv1D (K=80...3) · MaxPool", "#eff6ff", NAVY),
-            ("Classifier Head", "Global AvgPool 1D → Dense(64) → Sigmoid", "#ecfdf5", GREEN),
-        ]),
-        (3.93, "Baseline 2D CNN", "250.0k params · 259.9 KB", BLUE, "#f8fafc", [
-            ("Log-Mel Spectrogram", "64 Mel Bins × 130 Time Frames", "#ffffff", BLUE),
-            ("Convolutional Backbone", "4-Stage Conv2D (32 → 128) + 2×2 Pooling", "#eff6ff", BLUE),
-            ("Classifier Head", "Global AvgPool 2D → Dense(64) → Sigmoid", "#ecfdf5", GREEN),
-        ]),
-        (7.71, "Enhanced 2D CNN", "110.6k params · 123.6 KB", GREEN, "#f0fdf4", [
-            ("Normalized Log-Mel", "64 × 130 + SpecAug & Mixup", "#ffffff", GREEN),
-            ("Time-Preserving Backbone", "4-Stage Conv2D (16 → 128) · Early Pool Only", "#f0fdf4", GREEN),
-            ("Dual Classifier Heads", "Head 1: P(Shot) [λ=1] · Head 2: Anomaly [λ=0.3]", "#ecfdf5", GREEN),
-        ]),
-        (11.49, "Robust CRNN-PCEN", "397.8k params · 478.9 KB", RUST, "#fef2f2", [
-            ("Dynamic PCEN Map", "64 × 130 PCEN (α=0.98) · Invariant", "#ffffff", RUST),
-            ("CRNN Hybrid Backbone", "2D Conv Stack (32 → 64) + Bi-GRU (128)", "#fff7ed", AMBER),
-            ("Classifier Head", "Sequence Collapse (32 → 1) → Sigmoid", "#ecfdf5", GREEN),
-        ]),
+    # Column Category Headers
+    col_x = [0.15, 3.15, 6.75, 10.75]
+    col_w = [2.70, 3.30, 3.70, 3.30]
+
+    ax.text(col_x[0] + col_w[0]/2, 3.56, "Neural Topology", ha="center", va="center",
+            fontsize=9.5, fontweight="bold", color="#334155")
+    ax.text(col_x[1] + col_w[1]/2, 3.56, "Input Representation", ha="center", va="center",
+            fontsize=9.5, fontweight="bold", color="#334155")
+    ax.text(col_x[2] + col_w[2]/2, 3.56, "Feature Extraction Backbone", ha="center", va="center",
+            fontsize=9.5, fontweight="bold", color="#334155")
+    ax.text(col_x[3] + col_w[3]/2, 3.56, "Classification & Decision Head", ha="center", va="center",
+            fontsize=9.5, fontweight="bold", color="#334155")
+
+    # 4 Model Rows
+    models = [
+        ("Baseline 1D CNN", "End-to-End Raw Waveform", "#f8fafc", BORDER,
+         ("Raw Audio Waveform", "(16,537, 1) Float32 Samples"),
+         ("Multi-Scale Conv1D Stack", "K=80...3 · MaxPool1D · BatchNorm"),
+         ("Global Pool Classifier", "Global AvgPool 1D → Dense → P(Shot)")),
+
+        ("Baseline 2D CNN", "Standard Time-Frequency", "#f8fafc", BORDER,
+         ("Log-Mel Spectrogram", "64 Mel Bins × 130 Time Frames"),
+         ("4-Stage Conv2D Stack", "32 → 128 Filters (3×3) + 2×2 Pooling"),
+         ("Global Pool Classifier", "Global AvgPool 2D → Dense → P(Shot)")),
+
+        ("Enhanced 2D CNN", "Primary Proposed Model", "#f0fdf4", GREEN,
+         ("Normalized Mel Map", "SpecAugment & MixUp Augmentations"),
+         ("Time-Preserving Backbone", "4-Stage Conv2D (16→128) · Early Pool"),
+         ("Dual Classifier Heads", "Head 1: P(Shot) · Head 2: Anomaly Veto")),
+
+        ("Robust CRNN-PCEN", "Acoustic Transducer Invariant", "#f8fafc", BORDER,
+         ("Dynamic PCEN Map", "64 × 130 PCEN (α=0.98, r=0.04)"),
+         ("CRNN Hybrid Backbone", "Conv2D (32→64) + Bi-GRU (128 Units)"),
+         ("Sequence Collapse Head", "Temporal Collapse (32→1) → Dense → P(Shot)"))
     ]
 
-    col_w = 3.56
-    for x, title, meta, col_color, bg_fill, stages in cols:
-        card = FancyBboxPatch((x, 0.05), col_w, 2.34,
-                              boxstyle="round,pad=0.03,rounding_size=0.06",
-                              facecolor=bg_fill, edgecolor=col_color,
-                              linewidth=1.5, zorder=2)
-        ax.add_patch(card)
+    row_y = [2.62, 1.82, 1.02, 0.22]
+    rh = 0.62
 
-        ax.text(x + col_w / 2, 2.24, title, ha="center", va="center",
-                fontsize=11.0, fontweight="bold", color=col_color, zorder=3)
-        ax.text(x + col_w / 2, 2.08, meta, ha="center", va="center",
-                fontsize=9.0, fontweight="bold", color="#475569", zorder=3)
-        ax.plot([x + 0.10, x + col_w - 0.10], [1.98, 1.98],
-                color=col_color, linewidth=0.8, alpha=0.4, zorder=3)
+    for i, (m_name, m_tag, m_bg, m_border, s1, s2, s3) in enumerate(models):
+        y = row_y[i]
+        is_prop = (i == 2)
 
-        box_y = [1.38, 0.74, 0.10]
-        box_h = 0.54
-        for idx, (b_title, b_sub, fill, border) in enumerate(stages):
-            ly = box_y[idx]
-            l_box = FancyBboxPatch((x + 0.10, ly), col_w - 0.20, box_h,
-                                   boxstyle="round,pad=0.02,rounding_size=0.04",
-                                   facecolor=fill, edgecolor=border,
-                                   linewidth=1.1, zorder=3)
-            ax.add_patch(l_box)
-            ax.text(x + col_w / 2, ly + box_h - 0.16, b_title, ha="center", va="center",
-                    fontsize=9.5, fontweight="bold", color="#0f172a", zorder=4)
-            ax.text(x + col_w / 2, ly + 0.16, b_sub, ha="center", va="center",
-                    fontsize=8.0, fontweight="bold", color="#334155", zorder=4)
+        # Col 0: Model Name Card
+        b0 = FancyBboxPatch((col_x[0], y), col_w[0], rh,
+                            boxstyle="round,pad=0.02,rounding_size=0.05",
+                            facecolor="#ecfdf5" if is_prop else "#f1f5f9",
+                            edgecolor=GREEN if is_prop else "#64748b",
+                            linewidth=1.6 if is_prop else 1.2, zorder=3)
+        ax.add_patch(b0)
+        ax.text(col_x[0] + col_w[0]/2, y + rh - 0.20, m_name, ha="center", va="center",
+                fontsize=9.2, fontweight="bold", color=GREEN if is_prop else DARK, zorder=4)
+        ax.text(col_x[0] + col_w[0]/2, y + 0.18, m_tag, ha="center", va="center",
+                fontsize=7.4, fontweight="bold", color=GREEN if is_prop else MUTED, zorder=4)
 
-            # Arrow between stages
-            if idx < len(stages) - 1:
-                ax.annotate("", xy=(x + col_w / 2, ly - 0.02),
-                            xytext=(x + col_w / 2, ly + 0.02),
-                            arrowprops=dict(arrowstyle="-|>", color=col_color, lw=1.2, mutation_scale=8),
-                            zorder=5)
+        # Arrow 0 -> 1
+        ax.annotate("", xy=(col_x[1], y + rh/2), xytext=(col_x[0] + col_w[0], y + rh/2),
+                    arrowprops=dict(arrowstyle="-|>", color=m_border, lw=1.3, mutation_scale=9), zorder=4)
+
+        # Col 1: Input Representation
+        b1 = FancyBboxPatch((col_x[1], y), col_w[1], rh,
+                            boxstyle="round,pad=0.02,rounding_size=0.05",
+                            facecolor=m_bg, edgecolor=m_border, lw=1.5 if is_prop else 1.1, zorder=3)
+        ax.add_patch(b1)
+        ax.text(col_x[1] + col_w[1]/2, y + rh - 0.20, s1[0], ha="center", va="center",
+                fontsize=8.8, fontweight="bold", color=DARK, zorder=4)
+        ax.text(col_x[1] + col_w[1]/2, y + 0.18, s1[1], ha="center", va="center",
+                fontsize=7.4, fontweight="bold", color=MUTED, zorder=4)
+
+        # Arrow 1 -> 2
+        ax.annotate("", xy=(col_x[2], y + rh/2), xytext=(col_x[1] + col_w[1], y + rh/2),
+                    arrowprops=dict(arrowstyle="-|>", color=m_border, lw=1.3, mutation_scale=9), zorder=4)
+
+        # Col 2: Neural Backbone
+        b2 = FancyBboxPatch((col_x[2], y), col_w[2], rh,
+                            boxstyle="round,pad=0.02,rounding_size=0.05",
+                            facecolor=m_bg, edgecolor=m_border, lw=1.5 if is_prop else 1.1, zorder=3)
+        ax.add_patch(b2)
+        ax.text(col_x[2] + col_w[2]/2, y + rh - 0.20, s2[0], ha="center", va="center",
+                fontsize=8.8, fontweight="bold", color=DARK, zorder=4)
+        ax.text(col_x[2] + col_w[2]/2, y + 0.18, s2[1], ha="center", va="center",
+                fontsize=7.4, fontweight="bold", color=MUTED, zorder=4)
+
+        # Arrow 2 -> 3
+        ax.annotate("", xy=(col_x[3], y + rh/2), xytext=(col_x[2] + col_w[2], y + rh/2),
+                    arrowprops=dict(arrowstyle="-|>", color=m_border, lw=1.3, mutation_scale=9), zorder=4)
+
+        # Col 3: Classifier Head
+        b3 = FancyBboxPatch((col_x[3], y), col_w[3], rh,
+                            boxstyle="round,pad=0.02,rounding_size=0.05",
+                            facecolor=m_bg, edgecolor=m_border, lw=1.5 if is_prop else 1.1, zorder=3)
+        ax.add_patch(b3)
+        ax.text(col_x[3] + col_w[3]/2, y + rh - 0.20, s3[0], ha="center", va="center",
+                fontsize=8.8, fontweight="bold", color=DARK, zorder=4)
+        ax.text(col_x[3] + col_w[3]/2, y + 0.18, s3[1], ha="center", va="center",
+                fontsize=7.4, fontweight="bold", color=MUTED, zorder=4)
 
     save(fig, "fig_architectures.png")
 

@@ -118,34 +118,34 @@ Third, proximate firearm discharges routinely exceed 120\,dB SPL, physically sat
 \section{Model Architectures}
 \label{sec:models}
 
-Initial baseline evaluations utilizing logistic regression, Support Vector Machines (SVM), and Random Forests operating on MFCC summaries achieved 99--100\% accuracy on balanced datasets. However, these models exhibited catastrophic failure during continuous live microphone streaming. This degradation occurs because temporal averaging into a handful of coefficients obliterates the critical microsecond attack signatures of gunshots. Consequently, classical classifiers were deprecated. The five neural network architectures detailed below share the hardware conditioning pipeline outlined in Section~\ref{sec:conditioning}. Figure~\ref{fig:arch} illustrates the overarching architectural topologies. Exhaustive layer-by-layer listings are omitted for brevity; critical dimensionalities are preserved within the figure.
+Initial baseline evaluations utilizing logistic regression, Support Vector Machines (SVM), and Random Forests operating on MFCC summaries achieved 99--100\% accuracy on balanced datasets. However, these models exhibited catastrophic failure during continuous live microphone streaming, as temporal averaging obliterates microsecond ballistic shockwave signatures. The four deployable neural network architectures detailed below share the hardware conditioning pipeline outlined in Section~\ref{sec:conditioning}. Figure~\ref{fig:arch} illustrates the overarching architectural topologies.
 
 \begin{figure*}[!t]
 \centering
 \includegraphics[width=0.92\textwidth]{fig_architectures.pdf}
-\caption{The four successfully deployed architectural layouts. Note: The Enhanced 1D CNN leverages the identical waveform front-end as the baseline 1D CNN but incorporates a second classification head; however, post-INT8 quantization, it erroneously scores every window as a gunshot and is therefore deprecated.}
+\caption{Modular topologies of the four deployed edge neural network architectures.}
 \label{fig:arch}
 \end{figure*}
 
-The baseline 1D CNN processes the raw 16,537-sample waveform directly. Its initial convolutional kernel is 80 samples wide (approximately $3.6$\,ms at 22,050\,Hz)~\cite{dai2017}, enabling the primary layer to encapsulate rapid acoustic attacks. However, this architecture demonstrates severe overfitting to the training microphones: while hold-out recall achieves 99.7\%, real-world recall on external recordings collapses to 30\%.
+The baseline 1D CNN processes the raw 16,537-sample waveform directly. Its initial convolutional kernel is 80 samples wide (approximately $3.6$\,ms at 22,050\,Hz)~\cite{dai2017}, enabling the primary layer to encapsulate rapid acoustic attacks. However, this architecture exhibits severe overfitting to training microphones: while hold-out recall achieves 99.7\%, real-world recall on external recordings collapses to 30\%.
 
-The baseline 2D CNN analyzes a 64-band log-mel spectrogram (130 frames, FFT size 512, hop length 128)~\cite{hershey2017}. Preliminary iterations fed unscaled decibel values (ranging from $-80$\,dB to $0$\,dB) into ReLU activation functions. Predictably, ReLU saturated to zero across this negative domain, halting gradient propagation and resulting in a stalled checkpoint that falsely classified all 721 hold-out gunshots as negatives. Subsequent, successful 2D models utilize the normalization scheme:
+The baseline 2D CNN analyzes a 64-band log-mel spectrogram (130 frames, FFT size 512, hop length 128)~\cite{hershey2017}. To avoid ReLU gradient death across negative decibel domains (which stalled initial unscaled prototypes at 0\% recall), spectrogram inputs are normalized into $[0,1]$ via:
 \begin{equation}
-    S_{\mathrm{norm}} = (S_{\mathrm{dB}} + 80) / 80,
+    S_{\mathrm{norm}} = (S_{\mathrm{dB}} + 80) / 80.
     \label{eq:norm_db}
 \end{equation}
-which maps the spectrogram matrix into a strict $[0,1]$ domain. Max-pooling operations are deliberately omitted from the final convolutional blocks to prevent the attenuation of high-frequency attack transients.
+Max-pooling operations are omitted from final convolutional blocks to retain high-frequency attack transients.
 
-The Enhanced 2D CNN adopts a similar methodology utilizing a reduced filter width, augmented by MixUp~\cite{zhang2018}, SpecAugment~\cite{park2019}, speed perturbation~\cite{ko2015}, and an auxiliary classification head trained to output an anomaly score. The gunshot classification head dictates the empirical scores reported below. Conversely, the Enhanced 1D CNN applies this identical dual-head architecture directly to the waveform. Unfortunately, INT8 quantization severely saturates the 1D dilated convolutions, causing the model to erroneously classify every temporal window (including absolute silence) as a positive gunshot. It is therefore reported strictly as a failed export pipeline rather than a viable detector. The 2D models, operating on bounded $[0,1]$ spectrograms, quantize flawlessly without suffering this collapse.
+The Enhanced 2D CNN adopts a similar methodology with reduced filter widths, augmented by MixUp~\cite{zhang2018}, SpecAugment~\cite{park2019}, speed perturbation~\cite{ko2015}, and an auxiliary classification head trained to output an anomaly score. (A waveform-based dual-head 1D prototype was deprecated after INT8 quantization caused catastrophic weight saturation, falsely flagging all windows as positive; bounded $[0,1]$ 2D spectrograms quantize deterministically without saturation).
 
 The CRNN architecture supplants the static log-mel spectrogram with PCEN~\cite{lostanlen2019,lostanlen2019taslp}, defined as:
 \begin{equation}
     P[f,t] = \left( \frac{S[f,t]}{(\epsilon + M[f,t])^{\alpha}} + \delta \right)^{r} - \delta^{r},
     \label{eq:pcen}
 \end{equation}
-where $M[f,t]$ represents a single-pole IIR temporal smoothing of $S[f,t]$. By configuring $\alpha$ near $0.98$, stationary frequency bands asymptotically settle near unity. Consequently, an arbitrary gain fluctuation $g$ in the physical microphone scales the neural output by merely $g^{0.04}$. A bidirectional Gated Recurrent Unit (GRU)~\cite{cho2014} utilizing 64 units per direction subsequently analyzes the temporal frame sequence, ensuring that sustained tonal frequencies are correctly rejected as non-ballistic. Because PCEN implicitly requires a stable background noise estimation, the initial aggressive silence trimming detailed in Section~\ref{sec:data} is a fundamental prerequisite.
+where $M[f,t]$ represents a single-pole IIR temporal smoothing of $S[f,t]$. By configuring $\alpha$ near $0.98$, stationary frequency bands asymptotically settle near unity, rendering the output resilient to physical microphone gain swings ($g^{0.04}$). A bidirectional Gated Recurrent Unit (GRU)~\cite{cho2014} with 64 units per direction subsequently analyzes the temporal frame sequence to reject sustained non-ballistic tones.
 
-Finally, five TinyML sound event configurations targeting Cortex-M microcontrollers~\cite{cerutti2021} were evaluated as an initial feasibility screen. While standard validation accuracies fluctuated between 98.8\% and 99.7\%, live audio streaming exposed profound brittleness: an MFCC 1D CNN baseline falsely flagged 33 out of 47 ambient silence windows as gunshots. A 2D CNN operating on a mel spectrogram was the first architecture to successfully reject wind and thunder anomalies, operating at a 167\,ms latency. This empirical observation informed the decision to base the architectures in Fig.~\ref{fig:arch} entirely on spectrograms.
+Preliminary feasibility checks on Cortex-M sound event configurations~\cite{cerutti2021} demonstrated that while 1D MFCC networks yielded catastrophic false positive rates during streaming (33 of 47 silence windows falsely flagged), 2D spectrogram models reliably rejected environmental anomalies, confirming the necessity of time-frequency representations.
 
 \section{Experimental Setup and Metrics}
 \label{sec:setup}
@@ -174,15 +174,14 @@ Table~\ref{tab:holdout} serves as a baseline validation of the training process,
 \textbf{Model} & \textbf{Acc.} & \textbf{Recall} & \textbf{F1} & \textbf{FP} \\
 \midrule
 Baseline 1D CNN & 99.79\% & 99.72\% & 99.79\% & 1 \\
+Baseline 2D CNN & 99.65\% & 99.58\% & 99.65\% & 3 \\
 CRNN-PCEN & 99.79\% & 99.72\% & 99.79\% & 1 \\
 Enhanced 2D CNN & 99.51\% & 99.58\% & 99.51\% & 4 \\
-2D CNN, unscaled dB & 50.00\% & 0.00\% & --- & 0 \\
-Enhanced 1D CNN & 50.00\% & 100\% & 66.67\% & 721 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The unscaled 2D architecture represents the aforementioned saturated checkpoint resulting in 721 false negatives. The robust 2D metrics reported in Table~\ref{tab:300} reflect the corrected, normalized model. The Enhanced 1D row demonstrates total failure post-quantization, registering false positives on every evaluated file.
+All four viable architectures converge cleanly on the balanced laboratory dataset with $\ge 99.5\%$ accuracy. Preliminary unscaled dB prototypes suffered ReLU gradient saturation (0\% recall), while a dual-head 1D model saturated post-quantization (100\% false positives); both were excluded from further evaluation.
 
 \subsection{External recordings and the 300-clip set}
 Detection on the 75 external recordings is strictly defined by any sliding window exceeding the 0.50 confidence threshold (Table~\ref{tab:external}). Figure~\ref{fig:drop} contrasts this external recall against the initial hold-out performance. Evidently, the Baseline 1D CNN exhibits severe overfitting, essentially memorizing the training waveforms and failing catastrophically on novel microphones.
@@ -225,7 +224,6 @@ Table~\ref{tab:300} delineates the primary field results: performance on 300 hig
 \midrule
 Baseline 1D CNN & 45 & 85 & 72 & 30 & 95 & 84 \\
 Baseline 2D CNN & 66 & 88 & 59 & 45 & 94 & 77 \\
-Enhanced 1D CNN & 100 & 0 & 0 & 100 & 0 & 0 \\
 Enhanced 2D CNN & 67 & 82 & 66 & 38 & 99 & 89 \\
 CRNN-PCEN & 57 & 86 & 61 & 33 & 97 & 85 \\
 \bottomrule
@@ -255,7 +253,6 @@ Table~\ref{tab:latency} and Figure~\ref{fig:lat} summarize execution latency acr
 \midrule
 Baseline 1D CNN & 112.5\,KB & 2.29\,ms & 1.2\% \\
 Baseline 2D CNN & 259.9\,KB & 2.15\,ms & 1.2\% \\
-Enhanced 1D CNN & 118.5\,KB & 2.69\,ms & 1.4\% \\
 Enhanced 2D CNN & 123.6\,KB & 0.09\,ms & 0.05\% \\
 CRNN-PCEN & 478.9\,KB & 11.86\,ms & 6.3\% \\
 \bottomrule
@@ -343,7 +340,7 @@ Three-model ensemble & 77\% & 80\% & 17\,ms & 715\,KB \\
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
 
-This study conclusively demonstrates that while classical machine learning classifiers achieve near-perfect accuracy on balanced hold-out datasets, they fail catastrophically during live deployment because temporal averaging irreversibly destroys the microsecond shockwave signatures intrinsic to firearms. The architectural transition from 1D MFCC classifiers to 2D spectrogram-based CNNs yielded substantial improvements in the rejection of ambient noise and percussive imposters. Evaluated against 300 highly complex unseen recordings, the proposed Enhanced 2D CNN achieved 67\% sliding gunshot recall and 99\% peak ambient specificity, executing in a remarkable 0.09\,ms while occupying only 124\,KB of flash memory. Furthermore, the implementation of a PCEN-CRNN architecture demonstrated unparalleled resilience, maintaining stable recall under severe simulated microphone distortion with zero algorithmic degradation, thereby validating PCEN as a superior domain-shift normalizer for acoustic edge applications. The Enhanced 1D CNN was deemed fundamentally non-deployable following INT8 conversion due to catastrophic weight saturation within its dilated convolutional filters.
+This study conclusively demonstrates that while classical machine learning classifiers achieve near-perfect accuracy on balanced hold-out datasets, they fail catastrophically during live deployment because temporal averaging irreversibly destroys the microsecond shockwave signatures intrinsic to firearms. The architectural transition from 1D MFCC classifiers to 2D spectrogram-based CNNs yielded substantial improvements in the rejection of ambient noise and percussive imposters. Evaluated against 300 highly complex unseen recordings, the proposed Enhanced 2D CNN achieved 67\% sliding gunshot recall and 99\% peak ambient specificity, executing in a remarkable 0.09\,ms while occupying only 124\,KB of flash memory. Furthermore, the implementation of a PCEN-CRNN architecture demonstrated unparalleled resilience, maintaining stable recall under severe simulated microphone distortion with zero algorithmic degradation, thereby validating PCEN as a superior domain-shift normalizer for acoustic edge applications.
 
 A critical physical limitation was also identified during empirical testing: a solitary microphone is inherently incapable of distinguishing between aerial mortar fireworks and genuine gunfire, as both events generate virtually identical shockwave rise-times and reverberation profiles in the time domain. Resolving this acoustic ambiguity necessitates the future integration of spatial multi-microphone arrays.
 

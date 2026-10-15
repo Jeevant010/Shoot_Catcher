@@ -164,17 +164,23 @@ Empirical evaluation of temporal window lengths demonstrated that while initial 
 
 All empirical neural metrics reported herein utilize strictly exported INT8 quantized models~\cite{david2021}. Inference latency was established over 100 timed iterations executing on the Raspberry Pi~4, with CPU utilization strictly governed at 45--50\% utilizing 2\,GB of allocated RAM~\cite{banbury2021}. The TensorFlow Lite runtime leveraged the exact integer arithmetic path designated for embedded target boards.
 
+\begin{table}[!b]
+\centering
+\caption{Edge Inference Latency on Raspberry Pi~4 (Real-Time Hop Budget = 187.5\,ms)}
+\label{tab:latency}
+\footnotesize
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{INT8 Footprint} & \textbf{Mean Latency} & \textbf{Hop Utilization} \\
+\midrule
+Proposed 2D CNN & 123.6\,KB & 0.09\,ms & 0.05\% \\
+1D CNN & 112.5\,KB & 2.29\,ms & 1.2\% \\
+CRNN-PCEN & 478.9\,KB & 11.86\,ms & 6.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 The experimental evaluation encompasses two distinct datasets to rigorously assess model generalization. The balanced hold-out dataset consists of 1,442 clips of 750\,ms duration (721 gunshots, 721 ambient/imposter) derived from the primary cleaned corpus. The primary validation set features 300 entirely unseen recordings: 100 genuine gunshots, 100 ambient files, and 100 highly challenging percussive imposters (e.g., fireworks, door slams, thunder, drum beats).
-
-Evaluation metrics are defined as follows: \textit{Gunshot recall} is the fraction of genuine firearm files exceeding the detection threshold. \textit{Ambient specificity} represents the fraction of rain, traffic, and speech files correctly rejected below the threshold. \textit{Imposter rejection} indicates the successful suppression of percussive non-firearm events. \textit{Latency} denotes the computational time required to score a single 750\,ms operational window. Given the system's operational hop length of 187.5\,ms, any model exceeding this latency threshold fundamentally violates real-time processing constraints. Unless explicitly stated, the default classification threshold ($\tau$) is defined as $0.50$.
-
-Furthermore, \textit{peak-centered scoring} evaluates a singular 750\,ms acoustic slice perfectly centered upon the maximum waveform amplitude, whereas \textit{sliding scoring} continuously transverses the window across the entire audio file. Naturally, the sliding approach identifies more obscured shots but concomitantly increases the baseline false positive rate.
-
-\section{Results and Discussion}
-\label{sec:results}
-
-\subsection{Balanced Hold-Out Validation}
-Table~\ref{tab:holdout} establishes initial mathematical convergence on the 1,442-clip balanced hold-out dataset prior to edge deployment.
 
 \begin{table}[!t]
 \centering
@@ -192,7 +198,15 @@ CRNN-PCEN & 99.79\% & 99.72\% & 99.79\% & 1 \\
 \end{tabular}
 \end{table}
 
-All three operational architectures achieve greater than 99.5\% accuracy on laboratory hold-out splits, demonstrating robust gradient convergence under standard conditions.
+Evaluation metrics are defined as follows: \textit{Gunshot recall} is the fraction of genuine firearm files exceeding the detection threshold. \textit{Ambient specificity} represents the fraction of rain, traffic, and speech files correctly rejected below the threshold. \textit{Imposter rejection} indicates the successful suppression of percussive non-firearm events. \textit{Latency} denotes the computational time required to score a single 750\,ms operational window. Given the system's operational hop length of 187.5\,ms, any model exceeding this latency threshold fundamentally violates real-time processing constraints. Unless explicitly stated, the default classification threshold ($\tau$) is defined as $0.50$.
+
+Furthermore, \textit{peak-centered scoring} evaluates a singular 750\,ms acoustic slice perfectly centered upon the maximum waveform amplitude, whereas \textit{sliding scoring} continuously transverses the window across the entire audio file. Naturally, the sliding approach identifies more obscured shots but concomitantly increases the baseline false positive rate.
+
+\section{Results and Discussion}
+\label{sec:results}
+
+\subsection{Balanced Hold-Out Validation}
+Table~\ref{tab:holdout} establishes initial mathematical convergence on the 1,442-clip balanced hold-out dataset prior to edge deployment. All three operational architectures achieve greater than 99.5\% accuracy on laboratory hold-out splits, demonstrating robust gradient convergence under standard conditions.
 
 \subsection{Complex 300-Clip Field Benchmark}
 Evaluating models solely on hold-out test splits masks critical domain shifts encountered in real acoustic environments. Table~\ref{tab:300} and Figure~\ref{fig:300} delineate field performance across 300 complex unseen recordings (100 gunshots, 100 ambient tracks, and 100 percussive imposters). 
@@ -218,31 +232,15 @@ CRNN-PCEN & 57 & 86 & 61 & 33 & 97 & 85 \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[!t]
+\begin{figure}[!tb]
 \centering
-\includegraphics[width=0.95\columnwidth]{ieee_paper/figures/fig2_300clip_recall.pdf}
+\includegraphics[width=0.92\columnwidth]{ieee_paper/figures/fig2_300clip_recall.pdf}
 \caption{300-Clip Field Benchmark}
 \label{fig:300}
 \end{figure}
 
 \subsection{Edge Inference Latency}
 Table~\ref{tab:latency} summarizes on-device INT8 execution latency on the Raspberry Pi~4. Every deployed architecture comfortably satisfies the real-time hop budget of 187.5\,ms. The Proposed 2D CNN executes in an ultra-fast 0.09\,ms (consuming only 0.05\% of the hop budget) with a compact 123.6\,KB binary footprint. The CRNN-PCEN requires 11.86\,ms (6.3\% hop utilization) due to recurrent GRU state transitions, remaining fully deterministic and zero-frame-dropping.
-
-\begin{table}[!t]
-\centering
-\caption{Edge Inference Latency on Raspberry Pi~4 (Real-Time Hop Budget = 187.5\,ms)}
-\label{tab:latency}
-\footnotesize
-\begin{tabular}{lccc}
-\toprule
-\textbf{Model} & \textbf{INT8 Footprint} & \textbf{Mean Latency} & \textbf{Hop Utilization} \\
-\midrule
-Proposed 2D CNN & 123.6\,KB & 0.09\,ms & 0.05\% \\
-1D CNN & 112.5\,KB & 2.29\,ms & 1.2\% \\
-CRNN-PCEN & 478.9\,KB & 11.86\,ms & 6.3\% \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 \subsection{PCEN Transducer Invariance}
 To rigorously assess resilience against microphone deterioration, CRNN-PCEN inputs were subjected to aggressive simulated hardware distortions: band-limiting ($150$\,Hz to $8$\,kHz), digital clipping, dynamic gain swings ($0.5\times$ to $1.5\times$), and additive Gaussian noise ($15$--$30$\,dB SNR). As detailed in Table~\ref{tab:pcen_robust} and Figure~\ref{fig:pcen}, CRNN-PCEN exhibited identical recall across clean and distorted streams at both $\tau = 0.50$ (61\%) and $\tau = 0.70$ (59\%). At $\tau=0.10$, recall was preserved at 69\% across both regimes, demonstrating that dynamic PCEN gain stabilization renders edge models robust against low-cost transducer aging.
@@ -264,9 +262,9 @@ $\tau$ & \textbf{Clean} & \textbf{Distorted} & \textbf{Ambient (clean / dist.)} 
 \end{tabular}
 \end{table}
 
-\begin{figure}[!t]
+\begin{figure}[!tb]
 \centering
-\includegraphics[width=0.92\columnwidth]{ieee_paper/figures/fig6_pcen_distortion.pdf}
+\includegraphics[width=0.88\columnwidth]{ieee_paper/figures/fig6_pcen_distortion.pdf}
 \caption{PCEN Gain Invariance}
 \label{fig:pcen}
 \end{figure}
@@ -274,16 +272,16 @@ $\tau$ & \textbf{Clean} & \textbf{Distorted} & \textbf{Ambient (clean / dist.)} 
 \subsection{Multi-Model Ensemble Performance}
 The three architectures (Proposed 2D CNN, CRNN-PCEN, and 1D CNN) were integrated into a multi-model ensemble. The detection policy triggers a positive alert if any constituent model exceeds its threshold, subsequently validated by a lightweight spectral heuristic filter (checking low-frequency energy $<200$\,Hz, high-frequency energy $>4$\,kHz, and spectral centroid dynamics). As reported in Figure~\ref{fig:cm}, the ensemble elevates gunshot recall to 77\% (77 of 100 true shots captured). The combined flash footprint is approximately 715\,KB with a cumulative latency of 17\,ms, executing comfortably within the 187.5\,ms hop constraint.
 
-\begin{figure}[!t]
+\begin{figure}[!tb]
 \centering
-\includegraphics[width=0.88\columnwidth]{ieee_paper/figures/fig5_ensemble_confusion.pdf}
+\includegraphics[width=0.84\columnwidth]{ieee_paper/figures/fig5_ensemble_confusion.pdf}
 \caption{Ensemble Confusion Matrix}
 \label{fig:cm}
 \end{figure}
 
 Table~\ref{tab:paradigm} summarizes operational deployment tradeoffs. For single-sensor nodes operating under strict battery or flash constraints, the standalone Proposed 2D CNN provides optimal latency (0.09\,ms) and high ambient specificity (99\% peak). Where central gateway processing or multi-node consensus is available, the three-model ensemble delivers maximum detection sensitivity (77\% recall).
 
-\begin{table}[!t]
+\begin{table}[!tb]
 \centering
 \caption{Strategic Operating Paradigms}
 \label{tab:paradigm}

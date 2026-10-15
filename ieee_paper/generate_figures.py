@@ -280,63 +280,63 @@ def fig_recall_specificity():
     x = np.arange(len(models))
     w = 0.32
 
-    # Calibrated for Single-Column placement (\columnwidth = 3.5 in)
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 5.2), dpi=300)
+    # Calibrated for Single-Column placement (\columnwidth = 3.5 in, compact 3.6 in height)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 3.6), dpi=300)
 
     # Subplot (a): Gunshot Recall
     b1 = ax1.bar(x - w / 2, sliding_recall, w, label="Sliding Window",
-                 color=LIGHT_GRAY, hatch="//", edgecolor=BLACK, lw=1.2)
+                 color=LIGHT_GRAY, hatch="//", edgecolor=BLACK, lw=1.1)
     b2 = ax1.bar(x + w / 2, peak_recall,    w, label="Peak-Centered",
-                 color=WHITE, hatch="xx", edgecolor=BLACK, lw=1.2)
+                 color=WHITE, hatch="xx", edgecolor=BLACK, lw=1.1)
 
     for b in b1:
         val = b.get_height()
         bx = b.get_x() + b.get_width() / 2
-        ax1.text(bx, val + 2.0, f"{int(val)}%", ha="center", va="bottom", fontsize=8.5, fontweight="bold", color=BLACK)
+        ax1.text(bx, val + 2.0, f"{int(val)}%", ha="center", va="bottom", fontsize=7.8, fontweight="bold", color=BLACK)
 
     for b in b2:
         val = b.get_height()
         bx = b.get_x() + b.get_width() / 2
-        ax1.text(bx, val + 2.0, f"{int(val)}%", ha="center", va="bottom", fontsize=8.5, fontweight="bold", color=BLACK)
+        ax1.text(bx, val + 2.0, f"{int(val)}%", ha="center", va="bottom", fontsize=7.8, fontweight="bold", color=BLACK)
 
     ax1.set_xticks(x)
-    ax1.set_xticklabels(models, fontsize=8.8, fontweight="bold")
-    ax1.tick_params(axis="y", labelsize=8.5)
+    ax1.set_xticklabels(models, fontsize=8.2, fontweight="bold")
+    ax1.tick_params(axis="y", labelsize=7.8)
     ax1.set_ylim(0, 85)
-    ax1.set_ylabel("Recall (%)", fontsize=9.2, fontweight="bold")
-    ax1.set_title("(a) Gunshot Recall", fontsize=10.0, fontweight="bold", pad=6)
+    ax1.set_ylabel("Recall (%)", fontsize=8.5, fontweight="bold")
+    ax1.set_title("(a) Gunshot Recall", fontsize=9.2, fontweight="bold", pad=4)
     ax1.grid(axis="y", linestyle=":", color=MID_GRAY, alpha=0.5, linewidth=0.7)
 
     # Subplot (b): Ambient Specificity
     b3 = ax2.bar(x - w / 2, sliding_spec, w, label="Sliding Window",
-                 color=LIGHT_GRAY, hatch="//", edgecolor=BLACK, lw=1.2)
+                 color=LIGHT_GRAY, hatch="//", edgecolor=BLACK, lw=1.1)
     b4 = ax2.bar(x + w / 2, peak_spec,    w, label="Peak-Centered",
-                 color=WHITE, hatch="xx", edgecolor=BLACK, lw=1.2)
+                 color=WHITE, hatch="xx", edgecolor=BLACK, lw=1.1)
 
     for b in b3:
         val = b.get_height()
         bx = b.get_x() + b.get_width() / 2
-        ax2.text(bx, val + 1.5, f"{int(val)}%", ha="center", va="bottom", fontsize=8.5, fontweight="bold", color=BLACK)
+        ax2.text(bx, val + 1.5, f"{int(val)}%", ha="center", va="bottom", fontsize=7.8, fontweight="bold", color=BLACK)
 
     for b in b4:
         val = b.get_height()
         bx = b.get_x() + b.get_width() / 2
-        ax2.text(bx, val + 1.5, f"{int(val)}%", ha="center", va="bottom", fontsize=8.5, fontweight="bold", color=BLACK)
+        ax2.text(bx, val + 1.5, f"{int(val)}%", ha="center", va="bottom", fontsize=7.8, fontweight="bold", color=BLACK)
 
     ax2.set_xticks(x)
-    ax2.set_xticklabels(models, fontsize=8.8, fontweight="bold")
-    ax2.tick_params(axis="y", labelsize=8.5)
+    ax2.set_xticklabels(models, fontsize=8.2, fontweight="bold")
+    ax2.tick_params(axis="y", labelsize=7.8)
     ax2.set_ylim(60, 114)
-    ax2.set_ylabel("Specificity (%)", fontsize=9.2, fontweight="bold")
-    ax2.set_title("(b) Ambient Specificity", fontsize=10.0, fontweight="bold", pad=6)
+    ax2.set_ylabel("Specificity (%)", fontsize=8.5, fontweight="bold")
+    ax2.set_title("(b) Ambient Specificity", fontsize=9.2, fontweight="bold", pad=4)
     ax2.grid(axis="y", linestyle=":", color=MID_GRAY, alpha=0.5, linewidth=0.7)
 
     # Clean shared legend at top with comfortable clearance
     handles, labels = ax1.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.99),
-               ncol=2, fontsize=8.2, frameon=True, facecolor=WHITE, edgecolor=BLACK)
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 1.01),
+               ncol=2, fontsize=7.8, frameon=True, facecolor=WHITE, edgecolor=BLACK)
 
-    fig.subplots_adjust(top=0.89, bottom=0.07, left=0.18, right=0.96, hspace=0.36)
+    fig.subplots_adjust(top=0.88, bottom=0.08, left=0.19, right=0.96, hspace=0.45)
     save(fig, "fig2_300clip_recall.png", do_tight=False)
 
 

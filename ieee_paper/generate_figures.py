@@ -66,144 +66,106 @@ def save(fig, name, do_tight=True):
 # FIGURE 1: BENT 2-ROW EDGE PROCESSING PIPELINE (LARGE LEGIBLE TYPOGRAPHY)
 # ==============================================================================
 def fig_edge_pipeline():
-    # 2-Row Bent Academic Pipeline with large, crystal-clear typography
-    fig, ax = plt.subplots(figsize=(10.5, 4.6), dpi=300)
+    # 2-Row Bent Academic Pipeline with generous spacing and crystal-clear typography
+    fig, ax = plt.subplots(figsize=(10.5, 4.8), dpi=300)
     ax.set_xlim(0, 10.5)
-    ax.set_ylim(0, 4.6)
+    ax.set_ylim(0, 4.8)
     ax.axis("off")
 
-    bw = 2.28
-    bh = 1.20
-    y_top = 2.75
-    y_bot = 0.50
+    bw = 2.24
+    bh = 1.02
+    y_bot = 0.52
+    y_top = 3.12
     x_cols = [0.22, 2.80, 5.38, 7.96]
 
     # Raspberry Pi 4 Embedded Node Boundary (Encloses Col 1, 2, 3 in both rows)
-    node_box = FancyBboxPatch((2.60, 0.32), 7.82, 3.96,
-                              boxstyle="round,pad=0.03,rounding_size=0.07",
+    node_top = 4.60
+    node_bot = 0.30
+    node_box = FancyBboxPatch((2.60, node_bot), 7.78, node_top - node_bot,
+                              boxstyle="round,pad=0.03,rounding_size=0.08",
                               facecolor=WHITE, edgecolor=BLACK,
                               linestyle="--", linewidth=1.5, zorder=0)
     ax.add_patch(node_box)
-    ax.text(2.80, 4.10, "Embedded Node Boundary (Raspberry Pi 4)",
+    
+    # Boundary title with generous breathing room above top boxes
+    ax.text(2.80, 4.38, "Embedded Node Boundary (Raspberry Pi 4)",
             ha="left", va="center", fontsize=11.5, fontweight="bold", color=BLACK, zorder=2)
 
-    # --- TOP ROW: Signal Capture & Preprocessing (Left to Right) ---
-    # 0. Acoustic Input (External)
-    b0 = FancyBboxPatch((x_cols[0], y_top), bw, bh,
-                        boxstyle="round,pad=0.02,rounding_size=0.05",
-                        facecolor=WHITE, edgecolor=BLACK, linewidth=1.4, zorder=3)
-    ax.add_patch(b0)
-    ax.text(x_cols[0] + bw/2, y_top + bh - 0.38, "Acoustic Input",
-            ha="center", va="center", fontsize=11.5, fontweight="bold", color=BLACK, zorder=4)
-    ax.text(x_cols[0] + bw/2, y_top + 0.38, "22.05 kHz Stream",
-            ha="center", va="center", fontsize=9.8, color=DARK_GRAY, zorder=4)
+    boxes = [
+        # (col, row, title, subtitle)
+        (0, "top", "Acoustic Input", "22.05 kHz Audio Stream"),
+        (1, "top", "1. Sliding Buffer", "750 ms (187.5 ms Hop)"),
+        (2, "top", "2. Conditioning", "DC Strip & RMS Gate"),
+        (3, "top", "3. Feature Map", "64-Band Mel / PCEN"),
+        (3, "bot", "4. INT8 Inference", "TFLite Micro (ARM)"),
+        (2, "bot", "5. Decision Gate", r"Threshold $\tau \geq 0.50$"),
+        (0, "bot", "Central Gateway", "Alert & TOA Logging"),
+    ]
 
-    # 1. Sliding Buffer
-    b1 = FancyBboxPatch((x_cols[1], y_top), bw, bh,
-                        boxstyle="round,pad=0.02,rounding_size=0.05",
-                        facecolor=WHITE, edgecolor=BLACK, linewidth=1.4, zorder=3)
-    ax.add_patch(b1)
-    ax.text(x_cols[1] + bw/2, y_top + bh - 0.38, "1. Sliding Buffer",
-            ha="center", va="center", fontsize=11.5, fontweight="bold", color=BLACK, zorder=4)
-    ax.text(x_cols[1] + bw/2, y_top + 0.38, "750 ms (187.5 ms Hop)",
-            ha="center", va="center", fontsize=9.8, color=DARK_GRAY, zorder=4)
+    for col, row, title, sub in boxes:
+        y = y_top if row == "top" else y_bot
+        x = x_cols[col]
+        box = FancyBboxPatch((x, y), bw, bh,
+                             boxstyle="round,pad=0.02,rounding_size=0.06",
+                             facecolor=WHITE, edgecolor=BLACK, linewidth=1.4, zorder=3)
+        ax.add_patch(box)
+        ax.text(x + bw/2, y + bh * 0.64, title,
+                ha="center", va="center", fontsize=11.2, fontweight="bold", color=BLACK, zorder=4)
+        ax.text(x + bw/2, y + bh * 0.30, sub,
+                ha="center", va="center", fontsize=9.2, color=DARK_GRAY, zorder=4)
 
-    # 2. Conditioning
-    b2 = FancyBboxPatch((x_cols[2], y_top), bw, bh,
-                        boxstyle="round,pad=0.02,rounding_size=0.05",
-                        facecolor=WHITE, edgecolor=BLACK, linewidth=1.4, zorder=3)
-    ax.add_patch(b2)
-    ax.text(x_cols[2] + bw/2, y_top + bh - 0.38, "2. Conditioning",
-            ha="center", va="center", fontsize=11.5, fontweight="bold", color=BLACK, zorder=4)
-    ax.text(x_cols[2] + bw/2, y_top + 0.38, "DC Strip & RMS Gate",
-            ha="center", va="center", fontsize=9.8, color=DARK_GRAY, zorder=4)
+    # Top row forward arrows
+    for i in range(3):
+        ax.annotate("", xy=(x_cols[i+1], y_top + bh/2), xytext=(x_cols[i] + bw, y_top + bh/2),
+                    arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.4, mutation_scale=12), zorder=5)
 
-    # 3. Feature Map
-    b3 = FancyBboxPatch((x_cols[3], y_top), bw, bh,
-                        boxstyle="round,pad=0.02,rounding_size=0.05",
-                        facecolor=WHITE, edgecolor=BLACK, linewidth=1.4, zorder=3)
-    ax.add_patch(b3)
-    ax.text(x_cols[3] + bw/2, y_top + bh - 0.38, "3. Feature Map",
-            ha="center", va="center", fontsize=11.5, fontweight="bold", color=BLACK, zorder=4)
-    ax.text(x_cols[3] + bw/2, y_top + 0.38, "64-Band Mel / PCEN",
-            ha="center", va="center", fontsize=9.8, color=DARK_GRAY, zorder=4)
-
-    # Top row forward arrows:
-    ax.annotate("", xy=(x_cols[1], y_top + bh/2), xytext=(x_cols[0] + bw, y_top + bh/2),
-                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.4, mutation_scale=11), zorder=5)
-    ax.annotate("", xy=(x_cols[2], y_top + bh/2), xytext=(x_cols[1] + bw, y_top + bh/2),
-                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.4, mutation_scale=11), zorder=5)
-    ax.annotate("", xy=(x_cols[3], y_top + bh/2), xytext=(x_cols[2] + bw, y_top + bh/2),
-                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.4, mutation_scale=11), zorder=5)
-
-    # --- BEND ARROW: Down from Feature Map (Top Right) into INT8 Inference (Bottom Right) ---
+    # Bend arrow: 3. Feature Map (Top Right) -> 4. INT8 Inference (Bottom Right)
     ax.annotate("", xy=(x_cols[3] + bw/2, y_bot + bh), xytext=(x_cols[3] + bw/2, y_top),
-                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.6, mutation_scale=13), zorder=5)
+                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.6, mutation_scale=14), zorder=5)
 
-    # --- BOTTOM ROW: Inference, Decision & Gateway (Right to Left) ---
-    # 4. INT8 Inference (Col 3 Bottom)
-    b4 = FancyBboxPatch((x_cols[3], y_bot), bw, bh,
-                        boxstyle="round,pad=0.02,rounding_size=0.05",
-                        facecolor=WHITE, edgecolor=BLACK, linewidth=1.4, zorder=3)
-    ax.add_patch(b4)
-    ax.text(x_cols[3] + bw/2, y_bot + bh - 0.38, "4. INT8 Inference",
-            ha="center", va="center", fontsize=11.5, fontweight="bold", color=BLACK, zorder=4)
-    ax.text(x_cols[3] + bw/2, y_bot + 0.38, "TFLite Micro (ARM)",
-            ha="center", va="center", fontsize=9.8, color=DARK_GRAY, zorder=4)
-
-    # 5. Decision Gate (Col 2 Bottom)
-    b5 = FancyBboxPatch((x_cols[2], y_bot), bw, bh,
-                        boxstyle="round,pad=0.02,rounding_size=0.05",
-                        facecolor=WHITE, edgecolor=BLACK, linewidth=1.4, zorder=3)
-    ax.add_patch(b5)
-    ax.text(x_cols[2] + bw/2, y_bot + bh - 0.38, "5. Decision Gate",
-            ha="center", va="center", fontsize=11.5, fontweight="bold", color=BLACK, zorder=4)
-    ax.text(x_cols[2] + bw/2, y_bot + 0.38, "Threshold τ ≥ 0.50",
-            ha="center", va="center", fontsize=9.8, color=DARK_GRAY, zorder=4)
-
-    # 6. Central Gateway (Col 0 Bottom, External)
-    b6 = FancyBboxPatch((x_cols[0], y_bot), bw, bh,
-                        boxstyle="round,pad=0.02,rounding_size=0.05",
-                        facecolor=WHITE, edgecolor=BLACK, linewidth=1.4, zorder=3)
-    ax.add_patch(b6)
-    ax.text(x_cols[0] + bw/2, y_bot + bh - 0.38, "Central Gateway",
-            ha="center", va="center", fontsize=11.5, fontweight="bold", color=BLACK, zorder=4)
-    ax.text(x_cols[0] + bw/2, y_bot + 0.38, "Alert & TOA Logging",
-            ha="center", va="center", fontsize=9.8, color=DARK_GRAY, zorder=4)
-
-    # Bottom row arrows:
-    # 4 -> 5 (Right to Left)
+    # Bottom row arrow: 4 -> 5 (Right to Left)
     ax.annotate("", xy=(x_cols[2] + bw, y_bot + bh/2), xytext=(x_cols[3], y_bot + bh/2),
-                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.4, mutation_scale=11), zorder=5)
+                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.4, mutation_scale=12), zorder=5)
 
-    # 5 -> 6 (Right to Left: Positive Detection / RF Alert)
-    ax.annotate("", xy=(x_cols[0] + bw, y_bot + bh/2), xytext=(x_cols[2], y_bot + bh/2),
-                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.6, mutation_scale=13), zorder=5)
+    # --- Symmetrical, Spacious Feedback Loop (5 -> 1: No Threat / Advance Hop) ---
+    fb_x5 = x_cols[2] + bw * 0.70  # 5.38 + 1.57 = 6.95
+    fb_x1 = x_cols[1] + bw * 0.35  # 2.80 + 0.78 = 3.58
+    fb_mid_y = (y_bot + bh + y_top) / 2  # 2.33
 
-    # Badge on Alert Arrow
-    alert_mid_x = (x_cols[2] + x_cols[0] + bw) / 2
-    ax.text(alert_mid_x, y_bot + bh/2, "RF Alert Telemetry",
-            ha="center", va="center", fontsize=9.8, fontweight="bold", color=BLACK,
-            bbox=dict(boxstyle="round,pad=0.25", facecolor=WHITE, edgecolor=BLACK, lw=1.0),
-            zorder=6)
-
-    # Feedback Loop (From 5 UP to 1: No Threat / Advance Hop)
-    fb_x5 = x_cols[2] + bw/2
-    fb_x1 = x_cols[1] + bw/2
-    fb_mid_y = (y_top + y_bot + bh) / 2
-
+    # Up from Decision Gate
     ax.plot([fb_x5, fb_x5], [y_bot + bh, fb_mid_y], color=BLACK, lw=1.3, ls="--", zorder=4)
+    # Horizontal left connecting smoothly
     ax.plot([fb_x5, fb_x1], [fb_mid_y, fb_mid_y], color=BLACK, lw=1.3, ls="--", zorder=4)
+    # Up into Sliding Buffer with arrow
     ax.annotate("", xy=(fb_x1, y_top), xytext=(fb_x1, fb_mid_y),
-                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.3, ls="--", mutation_scale=11),
+                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.3, ls="--", mutation_scale=12),
                 zorder=4)
 
-    ax.text((fb_x5 + fb_x1)/2, fb_mid_y, " No Threat (Advance Hop 187.5 ms) ",
-            ha="center", va="center", fontsize=9.5, fontweight="bold", color=BLACK,
-            bbox=dict(boxstyle="round,pad=0.22", facecolor=WHITE, edgecolor=BLACK, lw=1.0),
+    # Centered feedback badge (2 compact lines so it doesn't crowd horizontal line turns)
+    ax.text((fb_x5 + fb_x1)/2, fb_mid_y,
+            "No Threat Detected\nAdvance Hop (187.5 ms)",
+            ha="center", va="center", fontsize=8.8, fontweight="bold", color=BLACK,
+            linespacing=1.25,
+            bbox=dict(boxstyle="round,pad=0.30,rounding_size=0.06", facecolor=WHITE, edgecolor=BLACK, lw=1.1),
             zorder=6)
 
-    save(fig, "fig1_edge_pipeline.png")
+    # --- RF Alert Telemetry: 5 -> Central Gateway (Across Boundary) ---
+    arrow_y = y_bot + bh/2
+    # Clean, unbroken arrow from Decision Gate across boundary into Central Gateway
+    ax.annotate("", xy=(x_cols[0] + bw, arrow_y), xytext=(x_cols[2], arrow_y),
+                arrowprops=dict(arrowstyle="-|>", color=BLACK, lw=1.6, mutation_scale=14), zorder=5)
+    
+    alert_mid_x = (x_cols[2] + x_cols[0] + bw) / 2
+    # Floating telemetry badge above arrow
+    ax.text(alert_mid_x, arrow_y + 0.36, "RF Alert Telemetry",
+            ha="center", va="center", fontsize=9.6, fontweight="bold", color=BLACK,
+            bbox=dict(boxstyle="round,pad=0.25,rounding_size=0.06", facecolor=WHITE, edgecolor=BLACK, lw=1.0),
+            zorder=6)
+    # Secondary condition label below arrow
+    ax.text(alert_mid_x, arrow_y - 0.28, r"Threat Confirmed ($\tau \geq 0.50$)",
+            ha="center", va="center", fontsize=8.6, fontstyle="italic", color=MID_GRAY, zorder=6)
+
+    save(fig, "fig1_edge_pipeline.png", do_tight=False)
 
 
 # ==============================================================================

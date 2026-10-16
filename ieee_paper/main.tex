@@ -42,6 +42,13 @@ Email: \{ui23cs30, ui23cs18, lokendra.chouhan, kaustubh.dhondge\}@iiitsurat.ac.i
 
 \maketitle
 
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.95\textwidth]{ieee_paper/figures/fig1_edge_pipeline.pdf}
+\caption{System Architecture}
+\label{fig:pipeline}
+\end{figure*}
+
 \begin{abstract}
 This paper presents a robust, decentralized detection architecture engineered specifically for localized edge deployment on a Raspberry Pi. By processing acoustic data entirely on the sensor node, our system guarantees privacy by transmitting only streamlined inference telemetry to the central gateway. To counter hardware-induced signal corruption, we integrate rigorous signal-conditioning protocols directly into the embedded pipeline, along with Per-Channel Energy Normalization (PCEN) to stabilize dynamic microphone-gain fluctuations. We empirically evaluate multiple neural architectures, transitioning from traditional 1D classifiers to optimized 2D Convolutional Neural Networks (CNNs) and Convolutional Recurrent Neural Networks (CRNNs). Our findings demonstrate that while classical machine learning classifiers fail catastrophically during live streaming, our deep learning architectures successfully isolate the microsecond shockwave signatures of firearms from complex background noise. The proposed 2D CNN architecture achieves 67\% sliding recall and 99\% ambient specificity on complex unseen audio with 0.09\,ms latency on a Raspberry Pi~4, while a CRNN-PCEN hybrid guarantees absolute gain invariance.
 \end{abstract}
@@ -81,13 +88,6 @@ The key contributions of this work are:
     \item Use a multi-model ensemble to raise unseen gunshot recall to 77\% while staying  within real-time hop boundaries.
     \item Eliminate cloud audio streaming by transmitting only streamlined, highly compressed inference data to the network gateway, improving privacy and operational resilience.
 \end{enumerate}
-
-\begin{figure*}[!t]
-\centering
-\includegraphics[width=0.95\textwidth]{ieee_paper/figures/fig1_edge_pipeline.pdf}
-\caption{System Architecture}
-\label{fig:pipeline}
-\end{figure*}
 
 \section{Related Work}
 \label{sec:related}

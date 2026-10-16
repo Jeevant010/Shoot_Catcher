@@ -270,7 +270,7 @@ def fig_architectures():
 # FIGURE 3: 300-CLIP BENCHMARK (CLEAN PROFESSIONAL SIDE-BY-SIDE)
 # ==============================================================================
 def fig_recall_specificity():
-    models = ["1D CNN", "2D CNN", "CRNN"]
+    models = ["1D\nCNN", "2D\nCNN", "CRNN"]
     sliding_recall = [45, 67, 57]
     peak_recall    = [30, 38, 33]
 
@@ -281,7 +281,7 @@ def fig_recall_specificity():
     w = 0.35
 
     # Side-by-side clean academic subplots (fits standard column width)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(3.5, 1.95), dpi=300)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(3.5, 2.05), dpi=300)
 
     # Subplot (a): Gunshot Recall
     ax1.bar(x - w / 2, sliding_recall, w, label="Sliding Window",
@@ -290,11 +290,11 @@ def fig_recall_specificity():
             color=WHITE, hatch="xx", edgecolor=BLACK, lw=1.0)
 
     ax1.set_xticks(x)
-    ax1.set_xticklabels(models, fontsize=7.5, fontweight="bold")
-    ax1.tick_params(axis="y", labelsize=7.5)
+    ax1.set_xticklabels(models, fontsize=7.2, fontweight="bold")
+    ax1.tick_params(axis="y", labelsize=7.2)
     ax1.set_ylim(0, 80)
-    ax1.set_ylabel("Recall (%)", fontsize=8.0, fontweight="bold")
-    ax1.set_title("(a) Gunshot Recall", fontsize=8.5, fontweight="bold", pad=4)
+    ax1.set_ylabel("Recall (%)", fontsize=7.8, fontweight="bold")
+    ax1.set_title("(a) Gunshot Recall", fontsize=8.2, fontweight="bold", pad=4)
     ax1.grid(axis="y", linestyle=":", color=MID_GRAY, alpha=0.5, linewidth=0.6)
 
     # Subplot (b): Ambient Specificity
@@ -304,19 +304,19 @@ def fig_recall_specificity():
             color=WHITE, hatch="xx", edgecolor=BLACK, lw=1.0)
 
     ax2.set_xticks(x)
-    ax2.set_xticklabels(models, fontsize=7.5, fontweight="bold")
-    ax2.tick_params(axis="y", labelsize=7.5)
+    ax2.set_xticklabels(models, fontsize=7.2, fontweight="bold")
+    ax2.tick_params(axis="y", labelsize=7.2)
     ax2.set_ylim(60, 105)
-    ax2.set_ylabel("Specificity (%)", fontsize=8.0, fontweight="bold")
-    ax2.set_title("(b) Ambient Specificity", fontsize=8.5, fontweight="bold", pad=4)
+    ax2.set_ylabel("Specificity (%)", fontsize=7.8, fontweight="bold")
+    ax2.set_title("(b) Ambient Specificity", fontsize=8.2, fontweight="bold", pad=4)
     ax2.grid(axis="y", linestyle=":", color=MID_GRAY, alpha=0.5, linewidth=0.6)
 
     # Clean shared legend at top without marker symbols
     handles, labels = ax1.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 1.06),
-               ncol=2, fontsize=7.5, frameon=True, facecolor=WHITE, edgecolor=BLACK)
+               ncol=2, fontsize=7.2, frameon=True, facecolor=WHITE, edgecolor=BLACK)
 
-    fig.subplots_adjust(top=0.82, bottom=0.18, left=0.14, right=0.98, wspace=0.48)
+    fig.subplots_adjust(top=0.81, bottom=0.22, left=0.14, right=0.98, wspace=0.48)
     save(fig, "fig2_300clip_recall.png", do_tight=False)
 
 

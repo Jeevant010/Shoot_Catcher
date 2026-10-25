@@ -231,3 +231,7 @@ test_dataset/*
 /Verification_Outputs/
 /custom_sound/
 /test_dataset/
+
+# Archives and zips
+drafts_archive/
+*.zip
